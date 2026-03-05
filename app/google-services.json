@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "597956729932",
+    "project_id": "smartelectroai",
+    "storage_bucket": "smartelectroai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:597956729932:android:05fc18036e4df1b45e68e9",
+        "android_client_info": {
+          "package_name": "com.simats.smartelectroai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDK7WfDq4ZXK2Tb-X46p2WtpFqhhCNRabk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
