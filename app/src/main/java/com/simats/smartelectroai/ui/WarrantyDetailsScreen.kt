@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,7 +39,7 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
-// --- CLEANED UP: Imported data models from RetrofitClient directly ---
+// --- IMPORT DATA MODELS ---
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.WarrantyDetailResponse
 import com.simats.smartelectroai.api.WarrantyDetailData
@@ -77,13 +76,17 @@ fun WarrantyDetailsScreen(warrantyId: Int, onBack: () -> Unit, onNavigate: (Stri
 
     LaunchedEffect(Unit) {
         if (!token.isNullOrEmpty()) {
-            // FIXED: Using centralized RetrofitClient instead of local builder!
             RetrofitClient.instance.getWarrantyDetail("Bearer $token", warrantyId)
                 .enqueue(object : Callback<WarrantyDetailResponse> {
                     override fun onResponse(call: Call<WarrantyDetailResponse>, response: Response<WarrantyDetailResponse>) {
                         if (response.isSuccessful) {
                             detailData = response.body()?.data
-                            targetProgress = detailData?.progress ?: 0f
+
+                            // FIXED: Invert the progress so it FILLS UP as time passes!
+                            // API returns 1.0 for new (365 days left) and 0.0 for expired (0 days left).
+                            // Doing `1f - progress` means it starts at 0% and grows to 100%.
+                            val apiProgress = detailData?.progress ?: 1f
+                            targetProgress = (1f - apiProgress).coerceIn(0f, 1f)
                         }
                         isLoading = false
                     }
@@ -139,8 +142,8 @@ fun WarrantyDetailsScreen(warrantyId: Int, onBack: () -> Unit, onNavigate: (Stri
                         val statUpper = detailData!!.status.uppercase()
                         val (badgeColor, badgeBg) = when {
                             statUpper == "ACTIVE" || statUpper == "SECURE" -> Pair(Color(0xFF2E7D32), Color(0xFFE8F5E9))
-                            statUpper.contains("ALERT") || statUpper.contains("EXPIRING") || statUpper == "PENDING" -> Pair(Color(0xFFEF6C00), Color(0xFFFFF3E0))
-                            statUpper == "EXPIRED" || statUpper == "REJECTED" -> Pair(Color(0xFFC62828), Color(0xFFFFEBEE))
+                            statUpper.contains("ALERT") || statUpper.contains("EXPIRING") || statUpper == "EXPIRED" -> Pair(Color(0xFFC62828), Color(0xFFFFEBEE))
+                            statUpper == "PENDING" -> Pair(Color(0xFFEF6C00), Color(0xFFFFF3E0))
                             else -> Pair(DetailBlueMain, DetailLightBlueBg)
                         }
 
@@ -184,8 +187,7 @@ fun WarrantyDetailsScreen(warrantyId: Int, onBack: () -> Unit, onNavigate: (Stri
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 val barColor = when {
-                                    detailData!!.status.uppercase() == "EXPIRED" -> Color(0xFFC62828)
-                                    detailData!!.status.uppercase().contains("ALERT") -> Color(0xFFEF6C00)
+                                    detailData!!.status.uppercase() == "EXPIRED" || detailData!!.status.uppercase().contains("ALERT") -> Color(0xFFC62828)
                                     else -> DetailBlueMain
                                 }
 

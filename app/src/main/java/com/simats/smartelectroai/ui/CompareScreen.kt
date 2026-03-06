@@ -130,7 +130,7 @@ fun CompareScreen(
                         value = searchQuery,
                         onValueChange = {
                             searchQuery = it
-                            // FIXED: Only load trending if search is cleared. NO LIVE SEARCHING.
+                            // Only load trending if search is cleared
                             if (it.isEmpty()) {
                                 viewModel.searchDevice("a")
                             }
@@ -141,7 +141,6 @@ fun CompareScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
                             onSearch = {
-                                // FIXED: API is called ONLY when the keyboard Search button is clicked
                                 if (searchQuery.isNotEmpty()) {
                                     viewModel.searchDevice(searchQuery)
                                 }
@@ -214,9 +213,6 @@ fun CompareScreen(
     }
 }
 
-// ==========================================
-// REMAINDER OF UI COMPONENTS (UNCHANGED)
-// ==========================================
 @Composable
 fun CompareDeviceCard(device: SearchDeviceResult, isAdded: Boolean, onToggle: () -> Unit) {
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color(0xFFEEEEEE)), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp), modifier = Modifier.fillMaxWidth()) {

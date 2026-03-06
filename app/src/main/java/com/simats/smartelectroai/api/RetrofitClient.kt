@@ -63,7 +63,7 @@ data class CompareDisplay(val type: String, val resolution: String, val refresh_
 data class CompareCamera(val rear_main: String, val rear_secondary: String, val rear_tertiary: String, val front: String)
 data class CompareBattery(val capacity: String, val charging: String)
 data class CompareStorage(val internal: String, val type: String)
-data class CompareDeviceDetail(val name: String, val price: String, val spec_score: String, val release_date: String, val performance: ComparePerformance, val display: CompareDisplay, val camera: CompareCamera, val battery: CompareBattery, val storage: CompareStorage, val pros: List<String>, val cons: List<String>, val antutu_score: String, val battery_life: String, val expert_score: String, val image_url: String?)
+data class CompareDeviceDetail(val id: Int? = null,val name: String, val price: String, val spec_score: String, val release_date: String, val performance: ComparePerformance, val display: CompareDisplay, val camera: CompareCamera, val battery: CompareBattery, val storage: CompareStorage, val pros: List<String>, val cons: List<String>, val antutu_score: String, val battery_life: String, val expert_score: String, val image_url: String?)
 data class CompareData(val device1: CompareDeviceDetail, val device2: CompareDeviceDetail, val ai_analysis: String)
 data class CompareResponse(val status: String, val data: CompareData?)
 data class AdminStats(val total_users: String, val total_orders: String, val active_warranties: String, val ai_searches: String)
@@ -116,38 +116,37 @@ interface ApiService {
     @GET("/products") fun getAllProducts(): Call<ProductResponse>
     @GET("/profile") fun getProfile(@Header("Authorization") token: String): Call<ProfileResponse>
     @GET("/my_orders") fun getMyOrders(@Header("Authorization") token: String): Call<MyOrdersResponse>
-    @GET("/my_warranties") fun getMyWarranties(@Header("Authorization") token: String): Call<MyWarrantiesResponse>
-    @GET("/my_warranties") fun getAlerts(@Header("Authorization") token: String): Call<AlertResponse>
     @GET("/search_devices") fun searchDevices(@Query("q") query: String): Call<SearchDeviceResponse>
     @POST("/compare_devices") fun compareDevices(@Body request: CompareRequest): Call<CompareResponse>
-    @GET("/admin/dashboard") fun getAdminDashboard(@Header("Authorization") token: String): Call<AdminDashboardResponse>
-    @GET("/admin/orders") fun getAdminOrders(@Header("Authorization") token: String): Call<AdminOrdersResponse>
-    @PUT("/admin/orders/{id}") fun updateAdminOrder(@Header("Authorization") token: String, @Path("id") orderId: Int, @Body request: UpdateOrderRequest): Call<AuthResponse>
-    @GET("/admin/ai_settings") fun getAiSettings(@Header("Authorization") token: String): Call<AiSettingsResponse>
-    @PUT("/admin/ai_settings") fun updateAiSettings(@Header("Authorization") token: String, @Body request: UpdateAiSettingsRequest): Call<AuthResponse>
-    @GET("/admin/warranties") fun getAdminWarranties(@Header("Authorization") token: String): Call<AdminWarrantyResponse>
-    @PUT("/admin/warranties/{id}/approve") fun approveAdminWarranty(@Header("Authorization") token: String, @Path("id") warrantyId: Int, @Body request: ApproveWarrantyRequest): Call<AuthResponse>
-    @Multipart @POST("/api/warranties/{id}/claim") fun submitWarrantyClaim(@Header("Authorization") token: String, @Path("id") id: Int, @Part("issue_type") issueType: RequestBody, @Part("description") description: RequestBody, @Part("service_mode") serviceMode: RequestBody, @Part invoiceImage: MultipartBody.Part, @Part deviceImage: MultipartBody.Part): Call<BaseResponse>
-    @GET("/api/warranties/{id}") fun getWarrantyDetail(@Header("Authorization") token: String, @Path("id") id: Int): Call<WarrantyDetailResponse>
-    @POST("/api/warranties/add") fun addWarrantyDevice(@Header("Authorization") token: String, @Body req: AddWarrantyReq): Call<AddWarrantyRes>
-    @POST("/api/warranties/{id}/extend") fun extendWarranty(@Header("Authorization") token: String, @Path("id") id: Int, @Body req: ExtendWarrantyReq): Call<ExtendWarrantyRes>
     @POST("/forgot_password") fun forgotPassword(@Body request: ForgotPasswordRequest): Call<SimpleResponse>
     @POST("/reset_password") fun resetPassword(@Body request: ResetPasswordRequest): Call<SimpleResponse>
     @GET("/notifications/preferences") fun getPrefs(@Header("Authorization") token: String): Call<UniqueNotifFetchResponse>
     @PUT("/notifications/preferences") fun updatePrefs(@Header("Authorization") token: String, @Body prefs: UniqueNotifPrefsData): Call<UniqueNotifUpdateResponse>
     @GET("/payment_history") fun getPaymentHistory(@Header("Authorization") token: String): Call<PaymentHistoryResponse>
 
-    // --- NEW ADMIN PAYMENT METHODS ---
-    @GET("/admin/payments")
-    fun getAdminPayments(@Header("Authorization") token: String): Call<AdminPaymentsResponse>
+    // --- USER WARRANTY ROUTES (FIXED PREFIXES) ---
+    @GET("/api/my_warranties") fun getMyWarranties(@Header("Authorization") token: String): Call<MyWarrantiesResponse>
+    @GET("/api/alerts") fun getAlerts(@Header("Authorization") token: String): Call<AlertResponse>
+    @GET("/api/warranties/{id}") fun getWarrantyDetail(@Header("Authorization") token: String, @Path("id") id: Int): Call<WarrantyDetailResponse>
+    @POST("/api/warranties/add") fun addWarrantyDevice(@Header("Authorization") token: String, @Body req: AddWarrantyReq): Call<AddWarrantyRes>
+    @POST("/api/warranties/{id}/extend") fun extendWarranty(@Header("Authorization") token: String, @Path("id") id: Int, @Body req: ExtendWarrantyReq): Call<ExtendWarrantyRes>
+    @Multipart @POST("/api/warranties/{id}/claim") fun submitWarrantyClaim(@Header("Authorization") token: String, @Path("id") id: Int, @Part("issue_type") issueType: RequestBody, @Part("description") description: RequestBody, @Part("service_mode") serviceMode: RequestBody, @Part invoiceImage: MultipartBody.Part, @Part deviceImage: MultipartBody.Part): Call<BaseResponse>
 
-    @PUT("/admin/payments/{id}/refund")
-    fun refundPayment(@Header("Authorization") token: String, @Path("id") id: Int): Call<SimpleResponse>
+    // --- ADMIN ROUTES (FIXED PREFIXES) ---
+    @GET("/api/admin/dashboard") fun getAdminDashboard(@Header("Authorization") token: String): Call<AdminDashboardResponse>
+    @GET("/api/admin/orders") fun getAdminOrders(@Header("Authorization") token: String): Call<AdminOrdersResponse>
+    @PUT("/api/admin/orders/{id}") fun updateAdminOrder(@Header("Authorization") token: String, @Path("id") orderId: Int, @Body request: UpdateOrderRequest): Call<AuthResponse>
+    @GET("/api/admin/ai_settings") fun getAiSettings(@Header("Authorization") token: String): Call<AiSettingsResponse>
+    @PUT("/api/admin/ai_settings") fun updateAiSettings(@Header("Authorization") token: String, @Body request: UpdateAiSettingsRequest): Call<AuthResponse>
+    @GET("/api/admin/warranties") fun getAdminWarranties(@Header("Authorization") token: String): Call<AdminWarrantyResponse>
+    @PUT("/api/admin/warranties/{id}/approve") fun approveAdminWarranty(@Header("Authorization") token: String, @Path("id") warrantyId: Int, @Body request: ApproveWarrantyRequest): Call<AuthResponse>
+    @GET("/api/admin/payments") fun getAdminPayments(@Header("Authorization") token: String): Call<AdminPaymentsResponse>
+    @PUT("/api/admin/payments/{id}/refund") fun refundPayment(@Header("Authorization") token: String, @Path("id") id: Int): Call<SimpleResponse>
 }
 
 // --- SINGLETON CLIENT ---
 object RetrofitClient {
-    private const val BASE_URL = "http://172.23.51.199:5000/"
+    private const val BASE_URL = "http://10.158.252.161:5000/"
     private val okHttpClient = OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
     val instance: ApiService by lazy { Retrofit.Builder().baseUrl(BASE_URL).client(okHttpClient).addConverterFactory(GsonConverterFactory.create()).build().create(ApiService::class.java) }
 }

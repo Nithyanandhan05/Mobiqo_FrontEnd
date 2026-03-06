@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Laptop
-import androidx.compose.material.icons.filled.Tablet
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,7 +44,6 @@ import retrofit2.Response
 // --- IMPORT MODELS FROM GLOBAL API CLIENT ---
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.AlertResponse
-import com.simats.smartelectroai.api.AlertStats
 import com.simats.smartelectroai.api.AlertDevice
 
 // --- DESIGN COLORS ---
@@ -53,8 +51,11 @@ private val AlertBlue = Color(0xFF1976D2)
 private val AlertGradient = Brush.linearGradient(listOf(Color(0xFF1976D2), Color(0xFF42A5F5)))
 private val AlertTextDark = Color(0xFF1E1E1E)
 private val AlertTextGray = Color(0xFF757575)
-private val ExpiringBg = Color(0xFFFFF3E0)
-private val ExpiringText = Color(0xFFEF6C00)
+
+// FIXED: Changed Alert Cards to Red to match the rest of the app
+private val ExpiringBg = Color(0xFFFFEBEE)
+private val ExpiringText = Color(0xFFC62828)
+
 private val ExpiredBg = Color(0xFFEEEEEE)
 private val ExpiredText = Color(0xFF757575)
 
@@ -64,7 +65,9 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
     var responseData by remember { mutableStateOf<AlertResponse?>(null) }
-    var selectedFilter by remember { mutableStateOf("All") }
+
+    // FIXED: Default filter is now "Alert" instead of "All"
+    var selectedFilter by remember { mutableStateOf("Alert") }
 
     // Animation visibility states
     var isTopVisible by remember { mutableStateOf(false) }
@@ -74,7 +77,6 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
     LaunchedEffect(Unit) {
         if (!token.isNullOrEmpty()) {
-            // FIXED: Using centralized RetrofitClient
             RetrofitClient.instance.getAlerts("Bearer $token").enqueue(object : Callback<AlertResponse> {
                 override fun onResponse(call: Call<AlertResponse>, response: Response<AlertResponse>) {
                     if (response.isSuccessful) responseData = response.body()
@@ -112,7 +114,6 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                 // --- 1. DASHBOARD SUMMARY CARD ---
                 AnimatedVisibility(visible = isTopVisible, enter = slideInVertically(initialOffsetY = { -50 }) + fadeIn()) {
-                    // Handle dynamic stats locally just like MyWarrantyScreen
                     val devices = responseData?.devices ?: emptyList()
                     val total = devices.size
                     val active = devices.count { it.status.lowercase() == "secure" || it.status.lowercase() == "active" }
@@ -124,7 +125,8 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                 // --- 2. FILTER CHIPS ---
                 AnimatedVisibility(visible = isTopVisible, enter = fadeIn()) {
-                    val filters = listOf("All", "Alert", "Expired", "Secure")
+                    // FIXED: Moved "Alert" to the front of the list
+                    val filters = listOf("Alert", "Expired", "All", "Secure")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(vertical = 24.dp)) {
                         items(filters) { filter ->
                             val isSelected = selectedFilter == filter

@@ -43,12 +43,22 @@ import retrofit2.Response
 private val PrimaryBlue = Color(0xFF1976D2)
 private val LightBlueGradient = Color(0xFF42A5F5)
 private val BgWhite = Color(0xFFFFFFFF)
+
+// Pending Status
 private val AlertOrange = Color(0xFFEF6C00)
 private val AlertOrangeBg = Color(0xFFFFF3E0)
+
+// Active Status
 private val SecureGreen = Color(0xFF2E7D32)
 private val SecureGreenBg = Color(0xFFE8F5E9)
+
+// Expiring / Expired Status (ADDED RED COLORS FOR ALERTS)
+private val AlertRed = Color(0xFFC62828)
+private val AlertRedBg = Color(0xFFFFEBEE)
+
 private val ExpiredGray = Color(0xFF757575)
 private val ExpiredGrayBg = Color(0xFFEEEEEE)
+
 private val GlassBg = Color.White.copy(alpha = 0.85f)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -110,7 +120,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                 // 1. DYNAMIC STATS CARD
                 item {
                     AnimatedVisibility(visible = isStatsVisible, enter = scaleIn(initialScale = 0.9f) + fadeIn(tween(500))) {
-                        // Calculate stats locally from the device list
                         val devices = responseData?.devices ?: emptyList()
                         val total = devices.size
                         val active = devices.count { it.status.lowercase() == "secure" || it.status.lowercase() == "active" }
@@ -252,7 +261,6 @@ private fun AnimatedDeviceCard(device: WarrantyDevice, onClick: () -> Unit) {
     val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, label = "scale")
     val elevation by animateDpAsState(if (isPressed) 8.dp else 2.dp, label = "elevation")
 
-    // Dynamic icon based on name
     val icon = when {
         device.name.lowercase().contains("laptop") -> Icons.Default.Laptop
         device.name.lowercase().contains("headphones") -> Icons.Default.Headphones
@@ -260,11 +268,15 @@ private fun AnimatedDeviceCard(device: WarrantyDevice, onClick: () -> Unit) {
     }
 
     val statLower = device.status.lowercase()
+
+    // UPDATED LOGIC: Alert & Expired are now Red. Pending is Orange.
     val (textColor, bgColor) = when {
         statLower == "secure" || statLower == "active" -> Pair(SecureGreen, SecureGreenBg)
-        statLower.contains("alert") || statLower == "pending" -> Pair(AlertOrange, AlertOrangeBg)
+        statLower.contains("alert") || statLower == "expired" || statLower == "rejected" -> Pair(AlertRed, AlertRedBg)
+        statLower == "pending" -> Pair(AlertOrange, AlertOrangeBg)
         else -> Pair(ExpiredGray, ExpiredGrayBg)
     }
+
     val animatedBgColor by animateColorAsState(bgColor, label = "bg")
 
     Card(
@@ -318,7 +330,6 @@ private fun AnimatedAiRecommendationCard(message: String) {
     }
 }
 
-// EXACT MATCH FOR DASHBOARD BOTTOM DOCK
 @Composable
 private fun WarrantyFloatingAiDock(onNavigate: (String) -> Unit) {
     val gradient = Brush.linearGradient(listOf(Color(0xFF2962FF), Color(0xFF03A9F4)))
@@ -332,7 +343,6 @@ private fun WarrantyFloatingAiDock(onNavigate: (String) -> Unit) {
                 Icon(Icons.Default.Home, null, tint = Color.Gray, modifier = Modifier.size(28.dp).clickable { onNavigate("Dashboard") })
                 Icon(Icons.AutoMirrored.Filled.CompareArrows, null, tint = Color.Gray, modifier = Modifier.size(28.dp).clickable { onNavigate("Compare") })
 
-                // Center Glowing AI Button
                 Box(
                     modifier = Modifier.size(56.dp).background(gradient, CircleShape).shadow(8.dp, CircleShape).clickable { onNavigate("Chat") },
                     contentAlignment = Alignment.Center
@@ -340,7 +350,6 @@ private fun WarrantyFloatingAiDock(onNavigate: (String) -> Unit) {
                     Icon(Icons.Default.AutoAwesome, null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
 
-                // Warranty icon is PrimaryBlue because we are ON the warranty screen
                 Icon(Icons.Default.VerifiedUser, null, tint = PrimaryBlue, modifier = Modifier.size(28.dp).clickable { onNavigate("MyWarranty") })
                 Icon(Icons.Default.Person, null, tint = Color.Gray, modifier = Modifier.size(28.dp).clickable { onNavigate("Profile") })
             }

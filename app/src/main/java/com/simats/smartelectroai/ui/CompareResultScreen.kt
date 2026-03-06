@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -18,7 +17,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -44,14 +42,9 @@ import com.simats.smartelectroai.api.CompareDeviceDetail
 import com.simats.smartelectroai.api.RecommendationData
 import com.simats.smartelectroai.api.RecommendationManager
 import com.simats.smartelectroai.api.TopMatch
-import com.simats.smartelectroai.api.RetrofitClient
-import com.simats.smartelectroai.api.SearchDeviceResponse
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
 
 // --- Colors ---
-private val ResBlue = Color(0xFF2962FF) // Updated to match your new App theme blue
+private val ResBlue = Color(0xFF2962FF)
 private val ResTextMain = Color(0xFF1E1E1E)
 private val ResTextSub = Color(0xFF757575)
 private val ResBgGray = Color(0xFFF8F9FA)
@@ -61,50 +54,25 @@ private val ResRed = Color(0xFFD32F2F)
 private val ResGreenBg = Color(0xFFE8F5E9)
 private val ResRedBg = Color(0xFFFFEBEE)
 
+// FIXED: Removed the nested API call. Instantly loads data using the ID from the comparison!
 private fun sendToProductDetailsAndNavigate(device: CompareDeviceDetail, onNavigate: (String) -> Unit) {
-    RetrofitClient.instance.searchDevices(device.name).enqueue(object : Callback<SearchDeviceResponse> {
-        override fun onResponse(call: Call<SearchDeviceResponse>, response: Response<SearchDeviceResponse>) {
-            val realId = response.body()?.results?.firstOrNull()?.id ?: -1
-
-            RecommendationManager.result = RecommendationData(
-                top_match = TopMatch(
-                    id = realId,
-                    name = device.name,
-                    price = device.price,
-                    match_percent = device.spec_score,
-                    battery_spec = device.battery.capacity,
-                    display_spec = "${device.display.size} ${device.display.type}",
-                    processor_spec = device.performance.processor,
-                    camera_spec = device.camera.rear_main,
-                    image_url = device.image_url,
-                    image_urls = if (device.image_url != null) listOf(device.image_url) else emptyList()
-                ),
-                alternatives = emptyList(),
-                analysis = "Transferred from your comparison analysis."
-            )
-            onNavigate("ProductDetail")
-        }
-
-        override fun onFailure(call: Call<SearchDeviceResponse>, t: Throwable) {
-            RecommendationManager.result = RecommendationData(
-                top_match = TopMatch(
-                    id = -1,
-                    name = device.name,
-                    price = device.price,
-                    match_percent = device.spec_score,
-                    battery_spec = device.battery.capacity,
-                    display_spec = "${device.display.size} ${device.display.type}",
-                    processor_spec = device.performance.processor,
-                    camera_spec = device.camera.rear_main,
-                    image_url = device.image_url,
-                    image_urls = if (device.image_url != null) listOf(device.image_url) else emptyList()
-                ),
-                alternatives = emptyList(),
-                analysis = "Transferred from your comparison analysis."
-            )
-            onNavigate("ProductDetail")
-        }
-    })
+    RecommendationManager.result = RecommendationData(
+        top_match = TopMatch(
+            id = device.id ?: -1, // Reads the ID directly from the updated Python backend
+            name = device.name,
+            price = device.price,
+            match_percent = device.spec_score,
+            battery_spec = device.battery.capacity,
+            display_spec = "${device.display.size} ${device.display.type}",
+            processor_spec = device.performance.processor,
+            camera_spec = device.camera.rear_main,
+            image_url = device.image_url,
+            image_urls = if (device.image_url != null) listOf(device.image_url) else emptyList()
+        ),
+        alternatives = emptyList(),
+        analysis = "Transferred from your comparison analysis."
+    )
+    onNavigate("ProductDetail")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -137,7 +105,6 @@ fun CompareResultScreen(
             )
         },
         bottomBar = {
-            // FIXED: Added the matching Animated Dock instead of the old profile bar!
             AnimatedFloatingDock(onNavigate)
         },
         containerColor = Color.White
@@ -309,7 +276,6 @@ fun CompareContent(
             Text("Remove All", color = ResRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
 
-        // FIXED: Added extra padding at the bottom so content doesn't hide behind the floating dock
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
@@ -347,9 +313,6 @@ fun SpecsRow(label: String, val1: String, val2: String, highlight: Boolean = fal
     }
 }
 
-// ==========================================
-// FLOATING DOCK (Consistent with Dashboard)
-// ==========================================
 @Composable
 private fun AnimatedFloatingDock(onNavigate: (String) -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "glow")

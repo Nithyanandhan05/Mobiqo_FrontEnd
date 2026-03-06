@@ -77,11 +77,14 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                 if (response.isSuccessful) {
                     warranties = response.body()?.warranties ?: emptyList()
                     visibleState.targetState = true
+                } else {
+                    Toast.makeText(context, "Error: ${response.code()}", Toast.LENGTH_SHORT).show()
                 }
             }
             override fun onFailure(call: Call<AdminWarrantyResponse>, t: Throwable) {
                 isLoading = false
                 visibleState.targetState = true
+                Toast.makeText(context, "Network Error: Please check connection", Toast.LENGTH_SHORT).show()
             }
         })
     }
@@ -108,7 +111,7 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                 TopAppBar(
                     title = { Text("Warranty Management", fontWeight = FontWeight.Bold, color = TextDark) },
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextDark) } },
-                    actions = { IconButton(onClick = { }) { Icon(Icons.Default.MoreVert, "More", tint = AdminBlue) } },
+                    actions = { IconButton(onClick = { loadWarranties() }) { Icon(Icons.Default.MoreVert, "Refresh", tint = AdminBlue) } },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
                 )
             }
@@ -193,11 +196,14 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 fun AnimatedFilterChip(text: String, isSelected: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(targetValue = if (isPressed) 0.92f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "chip_scale")
+
+    val rawScale = if (isPressed) 0.95f else 1f
+    val scale by animateFloatAsState(targetValue = rawScale, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "chip_scale")
+
     val bgColor by animateColorAsState(targetValue = if (isSelected) AdminBlue else BgGray, animationSpec = tween(300), label = "chip_bg")
     val textColor by animateColorAsState(targetValue = if (isSelected) Color.White else TextGray, animationSpec = tween(300), label = "chip_text")
 
-    Box(modifier = Modifier.scale(scale).clip(RoundedCornerShape(20.dp)).background(bgColor).clickable(interactionSource = interactionSource, indication = null, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Box(modifier = Modifier.scale(if (scale.isNaN()) 1f else scale).clip(RoundedCornerShape(20.dp)).background(bgColor).clickable(interactionSource = interactionSource, indication = null, onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text, color = textColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             if (isSelected && text == "Expiring Soon") { Spacer(Modifier.width(4.dp)); Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp)) }
@@ -210,17 +216,20 @@ fun AnimatedWarrantyRow(item: AdminWarrantyItem, index: Int, visibleState: Mutab
     AnimatedVisibility(visibleState = visibleState, enter = slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(400, delayMillis = index * 50)) + fadeIn(tween(delayMillis = index * 50))) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(0.35f)) {
-                Text(item.user_name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(item.device_name, fontSize = 11.sp, color = TextGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.user_name ?: "User", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.device_name ?: "Device", fontSize = 11.sp, color = TextGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Text(item.expiry_date, fontSize = 12.sp, color = TextGray, modifier = Modifier.weight(0.25f))
+            Text(item.expiry_date ?: "N/A", fontSize = 12.sp, color = TextGray, modifier = Modifier.weight(0.25f))
 
             Row(Modifier.weight(0.40f), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                AnimatedStatusBadge(item.status)
+                AnimatedStatusBadge(item.status ?: "Secure")
                 val viewInteractionSource = remember { MutableInteractionSource() }
                 val isViewPressed by viewInteractionSource.collectIsPressedAsState()
-                val viewScale by animateFloatAsState(targetValue = if (isViewPressed) 0.85f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "view_scale")
-                Text(text = "View", color = AdminBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.scale(viewScale).clickable(interactionSource = viewInteractionSource, indication = null) { onViewClick() })
+
+                val rawScale = if (isViewPressed) 0.90f else 1f
+                val viewScale by animateFloatAsState(targetValue = rawScale, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "view_scale")
+
+                Text(text = "View", color = AdminBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.scale(if (viewScale.isNaN()) 1f else viewScale).clickable(interactionSource = viewInteractionSource, indication = null) { onViewClick() })
             }
         }
     }
@@ -231,15 +240,13 @@ fun AnimatedStatusBadge(status: String) {
     val statLower = status.lowercase()
     val (statusText, targetColor, targetBg) = when {
         statLower == "secure" || statLower == "active" -> Triple("ACTIVE", Color(0xFF2E7D32), Color(0xFFE8F5E9))
-        statLower.contains("alert") -> Triple(status.uppercase(), Color(0xFFEF6C00), Color(0xFFFFF3E0))
+        statLower.contains("alert") -> Triple(status.uppercase(), Color(0xFFC62828), Color(0xFFFFEBEE))
         else -> Triple("EXPIRED", Color(0xFFC62828), Color(0xFFFFEBEE))
     }
     val bgColor by animateColorAsState(targetValue = targetBg, animationSpec = tween(400), label = "badge_bg")
     val textColor by animateColorAsState(targetValue = targetColor, animationSpec = tween(400), label = "badge_text")
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_transition")
-    val alpha by infiniteTransition.animateFloat(initialValue = 1f, targetValue = if (statLower.contains("alert")) 0.6f else 1f, animationSpec = infiniteRepeatable(animation = tween(800, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "badge_alpha")
 
-    Box(modifier = Modifier.alpha(alpha).background(bgColor, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+    Box(modifier = Modifier.background(bgColor, RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
         Text(statusText, color = textColor, fontWeight = FontWeight.Bold, fontSize = 9.sp, maxLines = 1)
     }
 }
@@ -248,11 +255,13 @@ fun AnimatedStatusBadge(status: String) {
 fun AnimatedReminderButton(context: Context) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val pressScale by animateFloatAsState(targetValue = if (isPressed) 0.95f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "btn_press")
+
+    val rawScale = if (isPressed) 0.95f else 1f
+    val pressScale by animateFloatAsState(targetValue = rawScale, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "btn_press")
 
     Button(
         onClick = { Toast.makeText(context, "Reminders Sent!", Toast.LENGTH_SHORT).show() },
-        interactionSource = interactionSource, modifier = Modifier.fillMaxWidth().height(48.dp).scale(pressScale),
+        interactionSource = interactionSource, modifier = Modifier.fillMaxWidth().height(48.dp).scale(if (pressScale.isNaN()) 1f else pressScale),
         shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = AdminBlue)
     ) {
         Icon(Icons.Default.Notifications, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -265,20 +274,19 @@ fun AnimatedReminderButton(context: Context) {
 fun AnimatedPendingClaimCard(claim: AdminWarrantyItem, index: Int, visibleState: MutableTransitionState<Boolean>, token: String, onActionComplete: () -> Unit) {
     val context = LocalContext.current
     var isProcessing by remember { mutableStateOf(false) }
-
-    // FIXED: Image Dialog State
     var showImageDialog by remember { mutableStateOf<String?>(null) }
 
-    // IMAGE POPUP DIALOG
     if (showImageDialog != null) {
         AlertDialog(
             onDismissRequest = { showImageDialog = null },
             confirmButton = { TextButton(onClick = { showImageDialog = null }) { Text("Close", color = AdminBlue) } },
             title = { Text("Attachment Preview") },
             text = {
+                // FIXED: Avoids "Private BASE_URL" compiler error by hardcoding the IP directly
+                val backendUrl = "http://10.79.196.213:5000"
+
                 AsyncImage(
-                    // Important: Matches your Flask backend IP
-                    model = "http://10.156.35.203:5000${showImageDialog}",
+                    model = "$backendUrl${showImageDialog}",
                     contentDescription = "Attachment",
                     modifier = Modifier.fillMaxWidth().height(300.dp),
                     contentScale = ContentScale.Fit
@@ -293,12 +301,16 @@ fun AnimatedPendingClaimCard(claim: AdminWarrantyItem, index: Int, visibleState:
         RetrofitClient.instance.approveAdminWarranty("Bearer $token", claim.id, req).enqueue(object : Callback<AuthResponse> {
             override fun onResponse(call: Call<AuthResponse>, response: Response<AuthResponse>) {
                 isProcessing = false
-                Toast.makeText(context, response.body()?.message ?: "Action completed", Toast.LENGTH_SHORT).show()
-                onActionComplete()
+                if (response.isSuccessful) {
+                    Toast.makeText(context, response.body()?.message ?: "Action completed", Toast.LENGTH_SHORT).show()
+                    onActionComplete()
+                } else {
+                    Toast.makeText(context, "Failed: ${response.code()}", Toast.LENGTH_SHORT).show()
+                }
             }
             override fun onFailure(call: Call<AuthResponse>, t: Throwable) {
                 isProcessing = false
-                Toast.makeText(context, "Error processing claim", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Network error. Check connection.", Toast.LENGTH_SHORT).show()
             }
         })
     }
@@ -354,10 +366,12 @@ fun AnimatedPendingClaimCard(claim: AdminWarrantyItem, index: Int, visibleState:
 fun AdminAttachmentThumbnail(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "scale")
+
+    val rawScale = if (isPressed) 0.95f else 1f
+    val scale = animateFloatAsState(targetValue = rawScale, label = "scale").value.takeIf { !it.isNaN() } ?: 1f
 
     Box(
-        modifier = modifier.scale(scale).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F5F5)).border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(8.dp))
+        modifier = modifier.scale(if (scale.isNaN()) 1f else scale).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF5F5F5)).border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(8.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick).padding(vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
