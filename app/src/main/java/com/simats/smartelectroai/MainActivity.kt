@@ -205,7 +205,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                 onBack = { navigateBack() },
                                 onResetSuccess = { navigateTo("Login") }
                             )
-                            "TrackOrder" -> TrackOrderScreen(onBack = { navigateBack() }, onInvoiceClick = { navigateTo("OrderInvoice") })
+                            "TrackOrder" -> TrackOrderScreen(onBack = { navigateBack() })
                             "OrderInvoice" -> OrderInvoiceScreen(onBack = { navigateBack() })
 
                             "AdminDashboard" -> AdminDashboardScreen(onNavigate = { navigateTo(it) })

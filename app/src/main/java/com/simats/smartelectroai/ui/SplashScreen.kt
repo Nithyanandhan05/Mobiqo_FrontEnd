@@ -15,8 +15,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.RawResourceDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -31,8 +33,13 @@ fun SplashScreen(onVideoFinished: () -> Unit) {
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             // Point it to your video in the res/raw folder
-            val videoUri = Uri.parse("android.resource://${context.packageName}/${R.raw.splash_video}")
-            val mediaItem = MediaItem.fromUri(videoUri)
+            val videoUri = RawResourceDataSource.buildRawResourceUri(R.raw.splash_video)
+            
+            // Explicitly setting the MIME type helps ExoPlayer skip format detection
+            val mediaItem = MediaItem.Builder()
+                .setUri(videoUri)
+                .setMimeType(MimeTypes.VIDEO_MP4)
+                .build()
 
             setMediaItem(mediaItem)
             prepare()

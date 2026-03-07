@@ -35,6 +35,10 @@ android {
     buildFeatures {
         compose = true
     }
+    // Prevent compression of video files in res/raw
+    androidResources {
+        noCompress += "mp4"
+    }
 }
 
 dependencies {

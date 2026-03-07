@@ -200,10 +200,9 @@ fun BackendOrderDetailsCard() {
 
 @Composable
 fun DeliveryTimeline(visibleSteps: Int) {
-    // Pair defines the text and whether it is completed (true) or pending (false)
     val steps = listOf(
         Pair("Payment Verified", true),
-        Pair("Warranty Registered", true),
+        Pair("Order Confirmed", true), // Changed from Warranty Registered
         Pair("Delivery Assigned", false),
         Pair("Out for Delivery", false)
     )
