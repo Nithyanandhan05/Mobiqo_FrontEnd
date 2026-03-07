@@ -126,11 +126,12 @@ fun CompareScreen(
                     Icon(Icons.Default.Search, null, tint = Color.Gray)
                     Spacer(modifier = Modifier.width(8.dp))
 
+                    // In your CompareScreen.kt
                     BasicTextField(
                         value = searchQuery,
                         onValueChange = {
                             searchQuery = it
-                            // Only load trending if search is cleared
+                            // Only load trending if search is completely cleared
                             if (it.isEmpty()) {
                                 viewModel.searchDevice("a")
                             }
@@ -141,14 +142,15 @@ fun CompareScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
                             onSearch = {
-                                if (searchQuery.isNotEmpty()) {
+                                // ONLY execute backend call when ENTER is pressed
+                                if (searchQuery.isNotBlank()) {
                                     viewModel.searchDevice(searchQuery)
                                 }
                                 keyboardController?.hide()
                             }
                         ),
                         decorationBox = { innerTextField ->
-                            if (searchQuery.isEmpty()) Text("Search smartphones...", color = Color.Gray, fontSize = 14.sp)
+                            if (searchQuery.isEmpty()) Text("Search smartphones... e.g. iPhone 15", color = Color.Gray, fontSize = 14.sp)
                             innerTextField()
                         }
                     )
