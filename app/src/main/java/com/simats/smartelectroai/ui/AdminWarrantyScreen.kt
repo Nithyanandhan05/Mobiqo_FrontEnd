@@ -45,6 +45,7 @@ import com.simats.smartelectroai.api.AdminWarrantyResponse
 import com.simats.smartelectroai.api.ApproveWarrantyRequest
 import com.simats.smartelectroai.api.AuthResponse
 import com.simats.smartelectroai.api.RetrofitClient
+import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -282,11 +283,12 @@ fun AnimatedPendingClaimCard(claim: AdminWarrantyItem, index: Int, visibleState:
             confirmButton = { TextButton(onClick = { showImageDialog = null }) { Text("Close", color = AdminBlue) } },
             title = { Text("Attachment Preview") },
             text = {
-                // FIXED: Avoids "Private BASE_URL" compiler error by hardcoding the IP directly
-                val backendUrl = "http://10.79.196.213:5000"
+                // <-- USING THE CENTROID HERE FOR IMAGE LOADING -->
+                // TrimEnd ensures we don't end up with a double slash if showImageDialog starts with one
+                val safeBaseUrl = ApiConfig.BASE_URL.trimEnd('/')
 
                 AsyncImage(
-                    model = "$backendUrl${showImageDialog}",
+                    model = "$safeBaseUrl${showImageDialog}",
                     contentDescription = "Attachment",
                     modifier = Modifier.fillMaxWidth().height(300.dp),
                     contentScale = ContentScale.Fit

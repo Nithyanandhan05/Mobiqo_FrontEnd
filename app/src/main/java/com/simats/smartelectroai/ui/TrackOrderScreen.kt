@@ -286,7 +286,7 @@ fun generateInvoicePdf(context: Context, order: OrderHistoryItem) {
         canvas.drawText("Total Paid Amount:", 40f, 530f, boldPaint)
         canvas.drawText(order.price, 450f, 530f, titlePaint)
 
-        canvas.drawText("Thank you for shopping with SmartElectro AI!", 40f, 780f, normalPaint)
+        canvas.drawText("Thank you for shopping with Mobiqo!", 40f, 780f, normalPaint)
 
         pdfDocument.finishPage(page)
 

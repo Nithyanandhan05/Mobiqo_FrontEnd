@@ -1,10 +1,17 @@
 package com.simats.smartelectroai
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -52,6 +59,14 @@ import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
 
+// --- NEW: RETROFIT IMPORTS FOR FCM SYNC ---
+import com.simats.smartelectroai.api.RetrofitClient
+import com.simats.smartelectroai.api.FcmTokenRequest
+import com.simats.smartelectroai.api.BaseResponse
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+
 // Global callback to pass Razorpay results to Compose Screens
 object PaymentCallbackHandler {
     var onSuccess: ((String, String, String) -> Unit)? = null
@@ -61,9 +76,27 @@ object PaymentCallbackHandler {
 private val MainActivityBlue = Color(0xFF1976D2)
 
 class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
+
+    // 1. Declare the permission launcher for Push Notifications
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            Log.d("FCM_PERMISSION", "Notification permission granted.")
+        } else {
+            Log.e("FCM_PERMISSION", "Notification permission denied.")
+        }
+    }
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 2. Ask for Notification Permissions (Required for Android 13+)
+        askNotificationPermission()
+
+        // 🚀 3. NEW: SYNC THE FCM TOKEN TO FLASK WHEN THE APP OPENS
+        syncFcmTokenToBackend()
 
         Checkout.preload(applicationContext)
 
@@ -151,11 +184,14 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "Login" -> SignInScreen(
                                 modifier = Modifier.padding(innerPadding),
                                 onSignIn = { isAdmin ->
+                                    // RE-SYNC TOKEN IMMEDIATELY UPON SUCCESSFUL LOGIN
+                                    syncFcmTokenToBackend()
+
                                     if (isAdmin) navigateTo("AdminDashboard")
                                     else navigateTo("Dashboard")
                                 },
                                 onSignUp = { navigateTo("Register") },
-                                onForgotPassword = { navigateTo("ForgotPassword") } // <--- ADD THIS
+                                onForgotPassword = { navigateTo("ForgotPassword") }
                             )
 
                             "Register" -> RegisterScreen(
@@ -233,7 +269,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                         selectedWarrantyId = screen.substringAfter("/").toIntOrNull() ?: 0
                                         navigateTo("WarrantyDetail")
                                     } else if (screen == "Chat") {
-                                        navigateTo("AskAiAssistant") // Handle AI Chat from Warranty
+                                        navigateTo("AskAiAssistant")
                                     } else {
                                         navigateTo(screen)
                                     }
@@ -296,7 +332,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                         compareDeviceNames = namesString.split(",").filter { it.isNotBlank() }
                                         navigateTo("CompareResult")
                                     } else if (screen == "Chat") {
-                                        navigateTo("AskAiAssistant") // Fix for AI button in Compare Dock
+                                        navigateTo("AskAiAssistant")
                                     } else {
                                         navigateTo(screen)
                                     }
@@ -344,6 +380,57 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ==========================================
+    // 🔥 FCM TOKEN SYNC LOGIC
+    // ==========================================
+    private fun syncFcmTokenToBackend() {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val jwtToken = prefs.getString("jwt_token", null)
+        val fcmToken = prefs.getString("fcm_token", null)
+
+        // Only send to Flask if the user is logged in AND Firebase gave us a token
+        if (!jwtToken.isNullOrEmpty() && !fcmToken.isNullOrEmpty()) {
+
+            // Note: FcmTokenRequest in RetrofitClient.kt MUST have 'platform: String' added!
+            val request = FcmTokenRequest(fcm_token = fcmToken, platform = "android")
+
+            RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", request)
+                .enqueue(object : Callback<BaseResponse> {
+                    override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+                        if (response.isSuccessful) {
+                            Log.d("FCM_SYNC", "✅ Successfully synced Android token to backend!")
+                        } else {
+                            Log.e("FCM_SYNC", "⚠️ Failed to sync token: ${response.code()}")
+                        }
+                    }
+
+                    override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
+                        Log.e("FCM_SYNC", "❌ Network error while syncing token: ${t.message}")
+                    }
+                })
+        } else {
+            Log.d("FCM_SYNC", "Skipped sync: User not logged in or FCM token missing.")
+        }
+    }
+
+    // 3. Request Notification Permission Implementation
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                // Permission already granted
+                Log.d("FCM_PERMISSION", "Notification permission already granted.")
+            } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                // Show rationale if needed, then request
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                // Directly request permission
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }

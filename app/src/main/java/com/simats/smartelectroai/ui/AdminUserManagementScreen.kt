@@ -35,6 +35,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
 
 // ==========================================
 // 1. ISOLATED API MODELS
@@ -92,7 +93,7 @@ fun AdminUserManagementScreen(onNavigate: (String) -> Unit) {
 
     val api = remember {
         Retrofit.Builder()
-            .baseUrl("http://10.113.190.161:5000/") // Keep your backend IP here
+            .baseUrl(ApiConfig.BASE_URL) // <-- USING THE CENTROID HERE
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(UniqueUserMgmtApi::class.java)
@@ -179,7 +180,6 @@ fun AdminUserManagementScreen(onNavigate: (String) -> Unit) {
                                 visible = visibleState.targetState,
                                 enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300 + index * 50)) + fadeIn()
                             ) {
-                                // --- PASSED onNavigate HERE ---
                                 UserManagementCard(user, api, token, context, onNavigate)
                             }
                         }
@@ -197,7 +197,7 @@ private fun UserManagementCard(
     api: UniqueUserMgmtApi,
     token: String,
     context: Context,
-    onNavigate: (String) -> Unit // --- ADDED onNavigate PARAMETER ---
+    onNavigate: (String) -> Unit
 ) {
     var isBlocked by remember { mutableStateOf(user.is_blocked) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -277,7 +277,6 @@ private fun UserManagementCard(
                     Text("Reset Password", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
-                val actionColor = if (isBlocked) BlockedRed else BlockedRed
                 val actionContainer = if (isBlocked) BlockedRed else Color.White
                 val actionContent = if (isBlocked) Color.White else BlockedRed
 
@@ -322,7 +321,6 @@ private fun UserManagementCard(
             Button(
                 onClick = {
                     pressed = true
-                    // --- HOOKED UP NAVIGATION HERE ---
                     onNavigate("AdminViewProfile/${user.id}")
                 },
                 modifier = Modifier

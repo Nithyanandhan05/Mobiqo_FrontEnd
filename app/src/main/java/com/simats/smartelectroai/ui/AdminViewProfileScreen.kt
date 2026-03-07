@@ -30,6 +30,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
+import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
 
 // ==========================================
 // 1. ISOLATED API MODELS
@@ -68,7 +69,7 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
 
     val api = remember {
         Retrofit.Builder()
-            .baseUrl("http://10.156.35.203:5000/") // Keep your backend IP here
+            .baseUrl(ApiConfig.BASE_URL) // <-- USING THE CENTROID HERE
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(UniqueAdminProfileApi::class.java)

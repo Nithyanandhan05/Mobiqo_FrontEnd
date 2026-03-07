@@ -10,6 +10,15 @@ import androidx.compose.runtime.mutableStateListOf
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 
+// ==========================================
+// 🌟 CENTROID IP MANAGEMENT 🌟
+// Change the IP address HERE, and it will automatically
+// update across the ENTIRE Android application.
+// ==========================================
+object ApiConfig {
+    const val BASE_URL = "http://172.23.51.199:5000/"
+}
+
 // --- DATA MODELS ---
 
 // NEW: Admin Payment Model
@@ -26,7 +35,7 @@ data class AdminPaymentItem(
 
 data class AdminPaymentsResponse(val status: String, val payments: List<AdminPaymentItem>)
 
-data class FcmTokenRequest(val fcm_token: String)
+data class FcmTokenRequest(val fcm_token: String, val platform: String = "android")
 data class OrderHistoryItem(
     val order_id: Int, val invoice_no: String?, val product_name: String, val price: String,
     val raw_price: Double?, val image_url: String?, val date: String, val status: String,
@@ -124,7 +133,7 @@ interface ApiService {
     @PUT("/notifications/preferences") fun updatePrefs(@Header("Authorization") token: String, @Body prefs: UniqueNotifPrefsData): Call<UniqueNotifUpdateResponse>
     @GET("/payment_history") fun getPaymentHistory(@Header("Authorization") token: String): Call<PaymentHistoryResponse>
 
-    // --- USER WARRANTY ROUTES (FIXED PREFIXES) ---
+    // --- USER WARRANTY ROUTES ---
     @GET("/api/my_warranties") fun getMyWarranties(@Header("Authorization") token: String): Call<MyWarrantiesResponse>
     @GET("/api/alerts") fun getAlerts(@Header("Authorization") token: String): Call<AlertResponse>
     @GET("/api/warranties/{id}") fun getWarrantyDetail(@Header("Authorization") token: String, @Path("id") id: Int): Call<WarrantyDetailResponse>
@@ -133,22 +142,29 @@ interface ApiService {
     @Multipart @POST("/api/warranties/{id}/claim") fun submitWarrantyClaim(@Header("Authorization") token: String, @Path("id") id: Int, @Part("issue_type") issueType: RequestBody, @Part("description") description: RequestBody, @Part("service_mode") serviceMode: RequestBody, @Part invoiceImage: MultipartBody.Part, @Part deviceImage: MultipartBody.Part): Call<BaseResponse>
 
     // --- ADMIN ROUTES (FIXED PREFIXES) ---
-    @GET("/api/admin/dashboard") fun getAdminDashboard(@Header("Authorization") token: String): Call<AdminDashboardResponse>
-    @GET("/api/admin/orders") fun getAdminOrders(@Header("Authorization") token: String): Call<AdminOrdersResponse>
-    @PUT("/api/admin/orders/{id}") fun updateAdminOrder(@Header("Authorization") token: String, @Path("id") orderId: Int, @Body request: UpdateOrderRequest): Call<AuthResponse>
-    @GET("/api/admin/ai_settings") fun getAiSettings(@Header("Authorization") token: String): Call<AiSettingsResponse>
-    @PUT("/api/admin/ai_settings") fun updateAiSettings(@Header("Authorization") token: String, @Body request: UpdateAiSettingsRequest): Call<AuthResponse>
-    @GET("/api/admin/warranties") fun getAdminWarranties(@Header("Authorization") token: String): Call<AdminWarrantyResponse>
-    @PUT("/api/admin/warranties/{id}/approve") fun approveAdminWarranty(@Header("Authorization") token: String, @Path("id") warrantyId: Int, @Body request: ApproveWarrantyRequest): Call<AuthResponse>
-    @GET("/api/admin/payments") fun getAdminPayments(@Header("Authorization") token: String): Call<AdminPaymentsResponse>
-    @PUT("/api/admin/payments/{id}/refund") fun refundPayment(@Header("Authorization") token: String, @Path("id") id: Int): Call<SimpleResponse>
+    @GET("/admin/dashboard") fun getAdminDashboard(@Header("Authorization") token: String): Call<AdminDashboardResponse>
+    @GET("/admin/orders") fun getAdminOrders(@Header("Authorization") token: String): Call<AdminOrdersResponse>
+    @PUT("/admin/orders/{id}") fun updateAdminOrder(@Header("Authorization") token: String, @Path("id") orderId: Int, @Body request: UpdateOrderRequest): Call<AuthResponse>
+    @GET("/admin/ai_settings") fun getAiSettings(@Header("Authorization") token: String): Call<AiSettingsResponse>
+    @PUT("/admin/ai_settings") fun updateAiSettings(@Header("Authorization") token: String, @Body request: UpdateAiSettingsRequest): Call<AuthResponse>
+    @GET("/admin/warranties") fun getAdminWarranties(@Header("Authorization") token: String): Call<AdminWarrantyResponse>
+    @PUT("/admin/warranties/{id}/approve") fun approveAdminWarranty(@Header("Authorization") token: String, @Path("id") warrantyId: Int, @Body request: ApproveWarrantyRequest): Call<AuthResponse>
+    @GET("/admin/payments") fun getAdminPayments(@Header("Authorization") token: String): Call<AdminPaymentsResponse>
+    @PUT("/admin/payments/{id}/refund") fun refundPayment(@Header("Authorization") token: String, @Path("id") id: Int): Call<SimpleResponse>
 }
 
 // --- SINGLETON CLIENT ---
 object RetrofitClient {
-    private const val BASE_URL = "http://10.158.252.161:5000/"
+    // USING CENTROID HERE
     private val okHttpClient = OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
-    val instance: ApiService by lazy { Retrofit.Builder().baseUrl(BASE_URL).client(okHttpClient).addConverterFactory(GsonConverterFactory.create()).build().create(ApiService::class.java) }
+    val instance: ApiService by lazy {
+        Retrofit.Builder()
+            .baseUrl(ApiConfig.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(ApiService::class.java)
+    }
 }
 
 // --- HELPERS ---

@@ -1,6 +1,7 @@
 package com.simats.smartelectroai.ui
 
 import android.content.Context
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -44,6 +45,9 @@ import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 
+// --- IMPORT FIREBASE MESSAGING ---
+import com.google.firebase.messaging.FirebaseMessaging
+
 import com.simats.smartelectroai.api.RecommendationManager
 import com.simats.smartelectroai.api.RecommendationData
 import com.simats.smartelectroai.api.TopMatch
@@ -79,18 +83,40 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
     var isSearchingGlobal by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        // 1. SYNC FCM TOKEN WITH FLASK BACKEND DIRECTLY FROM FIREBASE
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
-        val fcmToken = prefs.getString("fcm_token", null)
         val jwtToken = prefs.getString("jwt_token", "") ?: ""
 
-        if (fcmToken != null && jwtToken.isNotEmpty()) {
-            RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", FcmTokenRequest(fcmToken))
-                .enqueue(object : Callback<BaseResponse> {
-                    override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {}
-                    override fun onFailure(call: Call<BaseResponse>, t: Throwable) {}
-                })
+        if (jwtToken.isNotEmpty()) {
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                if (!task.isSuccessful) {
+                    Log.e("FCM_SYNC", "Fetching FCM registration token failed", task.exception)
+                    return@addOnCompleteListener
+                }
+
+                // Get new FCM registration token directly from Firebase
+                val fcmToken = task.result
+
+                // Send it to your backend
+                RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", FcmTokenRequest(fcmToken))
+                    .enqueue(object : Callback<BaseResponse> {
+                        override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+                            if (response.isSuccessful) {
+                                Log.d("FCM_SYNC", "✅ Token successfully synced with backend: $fcmToken")
+                            } else {
+                                Log.e("FCM_SYNC", "❌ Failed to sync token: ${response.code()}")
+                            }
+                        }
+                        override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
+                            Log.e("FCM_SYNC", "❌ Network error syncing token: ${t.message}")
+                        }
+                    })
+            }
+        } else {
+            Log.w("FCM_SYNC", "⚠️ Skipping sync: JWT Token is missing.")
         }
 
+        // 2. FETCH TOP PRODUCTS
         RetrofitClient.instance.getAllProducts().enqueue(object: Callback<ProductResponse> {
             override fun onResponse(call: Call<ProductResponse>, response: Response<ProductResponse>) {
                 if(response.isSuccessful) {
@@ -109,6 +135,7 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
         })
     }
 
+    // Animation States
     var isHeaderVisible by remember { mutableStateOf(false) }
     var isSearchVisible by remember { mutableStateOf(false) }
     var isAiCardVisible by remember { mutableStateOf(false) }
@@ -165,7 +192,7 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                     name = localMatch.name,
                                     price = safePrice,
                                     match_percent = "99%",
-                                    battery_spec = "5000mAh Battery", // Better Fallbacks
+                                    battery_spec = "5000mAh Battery",
                                     display_spec = "6.7 inch AMOLED",
                                     processor_spec = "Flagship Octa-Core",
                                     camera_spec = "50MP Triple Camera",
@@ -183,7 +210,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                     isSearchingGlobal = false
                                     val firstResult = response.body()?.results?.firstOrNull()
                                     if (firstResult != null) {
-                                        // Fix price if internet returns "Compare to reveal"
                                         val priceStr = firstResult.price ?: "45000"
                                         val hasDigits = priceStr.any { it.isDigit() }
                                         val safePrice = if (hasDigits) priceStr else "45000"
@@ -194,7 +220,7 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                                 name = firstResult.name,
                                                 price = safePrice,
                                                 match_percent = "95%",
-                                                battery_spec = "5000mAh Battery", // Better Fallbacks
+                                                battery_spec = "5000mAh Battery",
                                                 display_spec = "6.7 inch AMOLED",
                                                 processor_spec = firstResult.specs ?: "Flagship Octa-Core",
                                                 camera_spec = "50MP Triple Camera",
@@ -239,7 +265,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                     imageUrl = product.image_url,
                                     match = "99%"
                                 ) {
-                                    // FIXED: Applying realistic specs when clicking items on Dashboard
                                     val safePrice = if (product.price == "0" || product.price == "0.0") "45000" else product.price
 
                                     RecommendationManager.result = RecommendationData(
