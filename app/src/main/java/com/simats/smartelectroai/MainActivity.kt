@@ -27,7 +27,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,7 +51,6 @@ import com.simats.smartelectroai.worker.WarrantyCheckWorker
 import com.simats.smartelectroai.ui.*
 import com.simats.smartelectroai.ui.theme.SmartElectroAITheme
 import com.simats.smartelectroai.api.CartManager
-import kotlinx.coroutines.delay
 
 // --- RAZORPAY IMPORTS ---
 import com.razorpay.Checkout
@@ -63,6 +61,12 @@ import com.razorpay.PaymentResultWithDataListener
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.FcmTokenRequest
 import com.simats.smartelectroai.api.BaseResponse
+
+// 🚀 FIXED: CORRECT IMPORTS FOR THE NEW MVVM AUTHENTICATION SCREENS
+import com.simats.smartelectroai.ui.auth.RegisterScreen
+import com.simats.smartelectroai.ui.auth.SignInScreen
+import com.simats.smartelectroai.ui.auth.OtpVerificationScreen
+
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -181,26 +185,42 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                 onOnboardingFinished = { navigateTo("Login") }
                             )
 
-                            "Login" -> SignInScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                onSignIn = { isAdmin ->
-                                    // RE-SYNC TOKEN IMMEDIATELY UPON SUCCESSFUL LOGIN
-                                    syncFcmTokenToBackend()
+                            // 🚀 FIXED: NEW MVVM SIGN IN SCREEN
+                            "Login" -> {
+                                Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                                    SignInScreen(
+                                        onSignIn = { isAdmin ->
+                                            syncFcmTokenToBackend()
+                                            if (isAdmin) navigateTo("AdminDashboard")
+                                            else navigateTo("Dashboard")
+                                        },
+                                        onSignUp = { navigateTo("Register") },
+                                        onForgotPassword = { navigateTo("ForgotPassword") } // 🚀 ADDED BACK
+                                    )
+                                }
+                            }
 
-                                    if (isAdmin) navigateTo("AdminDashboard")
-                                    else navigateTo("Dashboard")
-                                },
-                                onSignUp = { navigateTo("Register") },
-                                onForgotPassword = { navigateTo("ForgotPassword") }
-                            )
+                            // 🚀 FIXED: NEW MVVM REGISTER SCREEN
+                            "Register" -> {
+                                Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                                    RegisterScreen(
+                                        onNavigateToOtp = { navigateTo("OtpVerification") },
+                                        onLoginClick = { navigateBack() }
+                                        // 🚀 REMOVED onForgotPassword from here, it doesn't belong on the Register screen.
+                                    )
+                                }
+                            }
 
-                            "Register" -> RegisterScreen(
-                                modifier = Modifier.padding(innerPadding),
-                                onRegister = { navigateTo("Dashboard") },
-                                onLogin = { navigateBack() },
-                                onTermsAndConditions = {},
-                                onPrivacyPolicy = {}
-                            )
+                            // 🚀 FIXED: NEW OTP VERIFICATION ROUTE
+                            "OtpVerification" -> {
+                                Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                                    OtpVerificationScreen(
+                                        onVerificationSuccess = { navigateTo("Login") },
+                                        onBack = { navigateBack() }
+                                    )
+                                }
+                            }
+
                             "ForgotPassword" -> ForgotPasswordScreen(
                                 onBack = { navigateBack() },
                                 onResetSuccess = { navigateTo("Login") }
@@ -349,7 +369,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
 
                     // --- Floating Cart Logic ---
                     val hideCartScreens = setOf(
-                        "Splash", "Welcome", "Onboarding", "Login", "Register","ForgetPassword",
+                        "Splash", "Welcome", "Onboarding", "Login", "Register", "OtpVerification", "ForgotPassword",
                         "MyCart", "Address", "Payment", "OrderSuccess",
                         "AddWarranty", "WarrantyDetail", "Invoice", "WarrantyAlerts",
                         "Profile", "EditProfile", "PrivacySecurity", "Notifications",
@@ -392,10 +412,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
         val jwtToken = prefs.getString("jwt_token", null)
         val fcmToken = prefs.getString("fcm_token", null)
 
-        // Only send to Flask if the user is logged in AND Firebase gave us a token
         if (!jwtToken.isNullOrEmpty() && !fcmToken.isNullOrEmpty()) {
-
-            // Note: FcmTokenRequest in RetrofitClient.kt MUST have 'platform: String' added!
             val request = FcmTokenRequest(fcm_token = fcmToken, platform = "android")
 
             RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", request)
@@ -417,19 +434,15 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
         }
     }
 
-    // 3. Request Notification Permission Implementation
     private fun askNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
             ) {
-                // Permission already granted
                 Log.d("FCM_PERMISSION", "Notification permission already granted.")
             } else if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
-                // Show rationale if needed, then request
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                // Directly request permission
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }

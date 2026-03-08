@@ -165,6 +165,15 @@ object RetrofitClient {
             .build()
             .create(ApiService::class.java)
     }
+    // 🚀 NEW: Expose the Auth API correctly
+    val authApi: AuthApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(ApiConfig.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(AuthApi::class.java)
+    }
 }
 
 // --- HELPERS ---

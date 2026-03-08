@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.simats.smartelectroai.api.ApiConfig // <-- 🚀 Imported your global IP config
 import kotlinx.coroutines.delay
 import retrofit2.Call
 import retrofit2.Callback
@@ -83,7 +84,11 @@ fun PrivacySecurityScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     val token = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getString("jwt_token", "") }
 
     val api = remember {
-        Retrofit.Builder().baseUrl("http://10.156.35.203:5000/").addConverterFactory(GsonConverterFactory.create()).build().create(PrivacySecurityApiService::class.java)
+        Retrofit.Builder()
+            .baseUrl(ApiConfig.BASE_URL) // 🚀 FIXED: Using Centroid IP from ApiConfig
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(PrivacySecurityApiService::class.java)
     }
 
     LaunchedEffect(Unit) {

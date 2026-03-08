@@ -1,6 +1,7 @@
 package com.simats.smartelectroai.ui
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -29,9 +30,13 @@ import com.simats.smartelectroai.api.ForgotPasswordRequest
 import com.simats.smartelectroai.api.ResetPasswordRequest
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.SimpleResponse
+import com.simats.smartelectroai.utils.ValidationUtils // 🚀 IMPORTED VALIDATION UTILS
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+
+// Modern Theme Color
+private val PrimaryBlue = Color(0xFF2874F0)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,8 +48,13 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
     var isLoading by remember { mutableStateOf(false) }
 
     var email by remember { mutableStateOf("") }
+    var emailError by remember { mutableStateOf<String?>(null) } // 🚀 Email Validation State
+
     var otp by remember { mutableStateOf("") }
+
     var newPassword by remember { mutableStateOf("") }
+    var passwordError by remember { mutableStateOf<String?>(null) } // 🚀 Password Validation State
+
     var confirmPassword by remember { mutableStateOf("") }
 
     var passwordVisible by remember { mutableStateOf(false) }
@@ -56,7 +66,6 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                 title = { Text("") },
                 navigationIcon = {
                     IconButton(onClick = {
-                        // Custom back logic to go to previous step instead of quitting immediately
                         if (step > 1) step -= 1 else onBack()
                     }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
@@ -74,24 +83,22 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(40.dp))
 
-            // Dynamic Icon based on step
             val icon = if (step == 1) Icons.Default.LockReset else Icons.Default.MarkEmailRead
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color(0xFF2196F3),
+                tint = PrimaryBlue,
                 modifier = Modifier.size(80.dp)
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Dynamic Title
             val title = when (step) {
                 1 -> "Reset Password"
                 2 -> "Check Your Email"
                 else -> "Create New Password"
             }
-            Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
+            Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -102,17 +109,27 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                 Text("Enter your registered email address. We will send you a 6-digit verification code.", color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // 🚀 ADDED REAL-TIME EMAIL VALIDATION
                 OutlinedTextField(
-                    value = email, onValueChange = { email = it },
+                    value = email,
+                    onValueChange = {
+                        email = it
+                        emailError = if (ValidationUtils.isValidEmail(it)) null else "Must be @gmail.com, @email.com, @saveetha.com"
+                    },
                     label = { Text("Email Address") }, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    isError = emailError != null,
+                    singleLine = true
                 )
+                AnimatedVisibility(visible = emailError != null) {
+                    Text(emailError ?: "", color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
 
                 PrimaryButton(text = "Send OTP", isLoading = isLoading) {
-                    if (email.isNotBlank()) {
+                    if (ValidationUtils.isValidEmail(email.trim())) {
                         isLoading = true
                         val req = ForgotPasswordRequest(email.trim())
                         RetrofitClient.instance.forgotPassword(req).enqueue(object : Callback<SimpleResponse> {
@@ -122,7 +139,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                                     Toast.makeText(context, "OTP Sent Successfully!", Toast.LENGTH_SHORT).show()
                                     step = 2
                                 } else {
-                                    Toast.makeText(context, response.body()?.message ?: "Error", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Email not found in our system", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             override fun onFailure(call: Call<SimpleResponse>, t: Throwable) {
@@ -130,7 +147,9 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                                 Toast.makeText(context, "Network Error", Toast.LENGTH_SHORT).show()
                             }
                         })
-                    } else Toast.makeText(context, "Please enter your email", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Please enter a valid email", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             // ==========================================
@@ -159,17 +178,33 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                 Text("Your new password must be different from previously used passwords.", color = Color.Gray, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // 🚀 ADDED REAL-TIME PASSWORD VALIDATION
                 OutlinedTextField(
-                    value = newPassword, onValueChange = { newPassword = it },
+                    value = newPassword,
+                    onValueChange = {
+                        newPassword = it
+                        passwordError = if (ValidationUtils.isValidPassword(it)) null else "8-16 chars, 1 Upper, 1 Lower, 1 Num, 1 Spec Char"
+                    },
                     label = { Text("New Password") }, modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    isError = passwordError != null,
+                    singleLine = true,
                     trailingIcon = {
                         val img = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
                         IconButton(onClick = { passwordVisible = !passwordVisible }) { Icon(img, null) }
                     }
                 )
+                // 🚀 PASSWORD STRENGTH METER
+                LinearProgressIndicator(
+                    progress = { ValidationUtils.calculatePasswordStrength(newPassword) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    color = if (ValidationUtils.calculatePasswordStrength(newPassword) == 1f) Color(0xFF4CAF50) else Color(0xFFFF9800)
+                )
+                AnimatedVisibility(visible = passwordError != null) {
+                    Text(passwordError ?: "", color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -179,6 +214,8 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                     shape = RoundedCornerShape(12.dp),
                     visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    isError = confirmPassword.isNotEmpty() && confirmPassword != newPassword,
+                    singleLine = true,
                     trailingIcon = {
                         val img = if (confirmPasswordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff
                         IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) { Icon(img, null) }
@@ -188,8 +225,8 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 PrimaryButton(text = "Reset Password", isLoading = isLoading) {
-                    if (newPassword.length < 6) {
-                        Toast.makeText(context, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show()
+                    if (passwordError != null || newPassword.isEmpty()) {
+                        Toast.makeText(context, "Please enter a strong valid password", Toast.LENGTH_SHORT).show()
                     } else if (newPassword != confirmPassword) {
                         Toast.makeText(context, "Passwords do not match!", Toast.LENGTH_SHORT).show()
                     } else {
@@ -203,7 +240,6 @@ fun ForgotPasswordScreen(onBack: () -> Unit, onResetSuccess: () -> Unit) {
                                     onResetSuccess()
                                 } else {
                                     Toast.makeText(context, response.body()?.message ?: "Invalid OTP", Toast.LENGTH_SHORT).show()
-                                    // If OTP is invalid, send them back to step 2 to fix it
                                     if (response.body()?.message?.contains("OTP") == true) step = 2
                                 }
                             }
@@ -245,7 +281,7 @@ fun ModernOtpInput(otp: String, onOtpChange: (String) -> Unit) {
                             .background(Color(0xFFFAFAFA), RoundedCornerShape(12.dp))
                             .border(
                                 width = if (isFocused) 2.dp else 1.dp,
-                                color = if (isFocused) Color(0xFF2196F3) else Color(0xFFE0E0E0),
+                                color = if (isFocused) PrimaryBlue else Color(0xFFE0E0E0),
                                 shape = RoundedCornerShape(12.dp)
                             ),
                         contentAlignment = Alignment.Center
@@ -254,7 +290,7 @@ fun ModernOtpInput(otp: String, onOtpChange: (String) -> Unit) {
                             text = char,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2196F3)
+                            color = PrimaryBlue
                         )
                     }
                 }
@@ -272,7 +308,7 @@ fun PrimaryButton(text: String, isLoading: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().height(54.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
         enabled = !isLoading
     ) {
         if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
