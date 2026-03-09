@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke // 🚀 FIXED: Added BorderStroke import
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,11 +32,13 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
-import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
+import com.simats.smartelectroai.api.ApiConfig
 
 // ==========================================
 // 1. ISOLATED API MODELS
@@ -62,12 +65,22 @@ internal data class UniqueToggleBlockResponse(
     val is_blocked: Boolean = false
 )
 
+internal data class UniqueForgotPasswordRequest(val email: String)
+internal data class UniqueSimpleResponse(val status: String?, val message: String?)
+
 internal interface UniqueUserMgmtApi {
     @GET("/admin/users")
     fun getAllUsers(@Header("Authorization") token: String): Call<UniqueUserMgmtResponse>
 
     @PUT("/admin/users/{id}/toggle_block")
     fun toggleUserBlock(@Header("Authorization") token: String, @Path("id") userId: Int): Call<UniqueToggleBlockResponse>
+    @POST("/admin/users/send_reset_link")
+    fun sendResetLink(
+        @Header("Authorization") token: String,
+        @Body request: UniqueForgotPasswordRequest
+    ): Call<UniqueSimpleResponse>
+    @POST("/forgot_password")
+    fun sendResetLink(@Body request: UniqueForgotPasswordRequest): Call<UniqueSimpleResponse>
 }
 
 // ==========================================
@@ -93,7 +106,7 @@ fun AdminUserManagementScreen(onNavigate: (String) -> Unit) {
 
     val api = remember {
         Retrofit.Builder()
-            .baseUrl(ApiConfig.BASE_URL) // <-- USING THE CENTROID HERE
+            .baseUrl(ApiConfig.BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(UniqueUserMgmtApi::class.java)
@@ -200,7 +213,8 @@ private fun UserManagementCard(
     onNavigate: (String) -> Unit
 ) {
     var isBlocked by remember { mutableStateOf(user.is_blocked) }
-    var isProcessing by remember { mutableStateOf(false) }
+    var isProcessingBlock by remember { mutableStateOf(false) }
+    var isSendingReset by remember { mutableStateOf(false) }
 
     val statusColor by animateColorAsState(if (isBlocked) BlockedRed else ActiveGreen, label = "color")
     val statusBgColor by animateColorAsState(if (isBlocked) BlockedRedBg else ActiveGreenBg, label = "bgcolor")
@@ -267,14 +281,43 @@ private fun UserManagementCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
                 OutlinedButton(
-                    onClick = { Toast.makeText(context, "Password reset link sent", Toast.LENGTH_SHORT).show() },
-                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        if (isSendingReset) return@OutlinedButton
+
+                        if (user.email.isNullOrEmpty()) {
+                            Toast.makeText(context, "User has no email address", Toast.LENGTH_SHORT).show()
+                            return@OutlinedButton
+                        }
+
+                        isSendingReset = true
+                        val req = UniqueForgotPasswordRequest(user.email)
+                        api.sendResetLink("Bearer $token", req).enqueue(object : Callback<UniqueSimpleResponse> {
+                            override fun onResponse(call: Call<UniqueSimpleResponse>, response: Response<UniqueSimpleResponse>) {
+                                isSendingReset = false
+                                if (response.isSuccessful && response.body()?.status == "success") {
+                                    Toast.makeText(context, "Recovery email sent to ${user.email}", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Failed to send reset link", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            override fun onFailure(call: Call<UniqueSimpleResponse>, t: Throwable) {
+                                isSendingReset = false
+                                Toast.makeText(context, "Network Error", Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                    },
+                    modifier = Modifier.weight(1f).height(40.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = BlueMain),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BlueMain)
+                    border = BorderStroke(1.dp, BlueMain)
                 ) {
-                    Text("Reset Password", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    if (isSendingReset) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = BlueMain, strokeWidth = 2.dp)
+                    } else {
+                        Text("Reset Password", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
                 }
 
                 val actionContainer = if (isBlocked) BlockedRed else Color.White
@@ -282,8 +325,8 @@ private fun UserManagementCard(
 
                 Button(
                     onClick = {
-                        if (isProcessing) return@Button
-                        isProcessing = true
+                        if (isProcessingBlock) return@Button
+                        isProcessingBlock = true
                         api.toggleUserBlock("Bearer $token", user.id).enqueue(object : Callback<UniqueToggleBlockResponse> {
                             override fun onResponse(call: Call<UniqueToggleBlockResponse>, response: Response<UniqueToggleBlockResponse>) {
                                 if (response.isSuccessful && response.body()?.status == "success") {
@@ -292,20 +335,20 @@ private fun UserManagementCard(
                                 } else {
                                     Toast.makeText(context, "Failed to update status", Toast.LENGTH_SHORT).show()
                                 }
-                                isProcessing = false
+                                isProcessingBlock = false
                             }
                             override fun onFailure(call: Call<UniqueToggleBlockResponse>, t: Throwable) {
-                                isProcessing = false
+                                isProcessingBlock = false
                                 Toast.makeText(context, "Network error", Toast.LENGTH_SHORT).show()
                             }
                         })
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(40.dp),
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = actionContainer, contentColor = actionContent),
-                    border = if (!isBlocked) androidx.compose.foundation.BorderStroke(1.dp, BlockedRed) else null
+                    border = if (!isBlocked) BorderStroke(1.dp, BlockedRed) else null
                 ) {
-                    if (isProcessing) {
+                    if (isProcessingBlock) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = actionContent, strokeWidth = 2.dp)
                     } else {
                         Text(if (isBlocked) "Unblock User" else "Block User", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -313,7 +356,7 @@ private fun UserManagementCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             var pressed by remember { mutableStateOf(false) }
             val scale by animateFloatAsState(targetValue = if (pressed) 0.98f else 1f, animationSpec = tween(100), label = "")
@@ -325,6 +368,7 @@ private fun UserManagementCard(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(46.dp)
                     .scale(scale),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = LightGrayBg, contentColor = Color(0xFF424242))

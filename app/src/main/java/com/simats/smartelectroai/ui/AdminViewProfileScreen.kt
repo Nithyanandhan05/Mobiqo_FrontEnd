@@ -1,6 +1,6 @@
 package com.simats.smartelectroai.ui
 
-import android.content.Context
+import android.content.Context // 🚀 FIXED: Added Context import
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import retrofit2.Call
@@ -30,7 +31,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Path
-import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
+import com.simats.smartelectroai.api.ApiConfig
 
 // ==========================================
 // 1. ISOLATED API MODELS
@@ -69,7 +70,7 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
 
     val api = remember {
         Retrofit.Builder()
-            .baseUrl(ApiConfig.BASE_URL) // <-- USING THE CENTROID HERE
+            .baseUrl(ApiConfig.BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(UniqueAdminProfileApi::class.java)
@@ -108,7 +109,7 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        containerColor = Color.White
+        containerColor = LightGrayBg
     ) { padding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -123,14 +124,12 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header Profile Card
                 item {
                     AnimatedVisibility(visibleState = visibleState, enter = slideInVertically { -it } + fadeIn()) {
                         AdminProfileHeader(user)
                     }
                 }
 
-                // Analytics / Quick Stats
                 item {
                     AnimatedVisibility(visibleState = visibleState, enter = fadeIn(tween(500))) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -140,9 +139,8 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
                     }
                 }
 
-                // Recent Orders Section
                 item {
-                    Text("Order History", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text("Order History", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                 }
                 if (orders.isEmpty()) {
                     item { Text("No orders placed yet.", color = TextGray, fontSize = 14.sp) }
@@ -150,9 +148,8 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
                     items(orders) { order -> AdminProfileOrderCard(order) }
                 }
 
-                // Warranties Section
                 item {
-                    Text("Registered Devices", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+                    Text("Registered Devices", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
                 }
                 if (warranties.isEmpty()) {
                     item { Text("No active warranties.", color = TextGray, fontSize = 14.sp) }
@@ -160,7 +157,7 @@ fun AdminViewProfileScreen(userId: Int, onBack: () -> Unit) {
                     items(warranties) { warranty -> AdminProfileWarrantyCard(warranty) }
                 }
 
-                item { Spacer(Modifier.height(24.dp)) }
+                item { Spacer(Modifier.height(32.dp)) }
             }
         }
     }
@@ -173,7 +170,8 @@ private fun AdminProfileHeader(user: UniqueProfileUserData?) {
 
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = LightGrayBg),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -183,22 +181,31 @@ private fun AdminProfileHeader(user: UniqueProfileUserData?) {
             ) {
                 Text(initials.ifEmpty { "U" }, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = BlueMain)
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(safeName, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            Text(user?.email ?: "N/A", color = TextGray, fontSize = 14.sp)
             Spacer(modifier = Modifier.height(16.dp))
+            Text(safeName, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Color(0xFF1E1E1E))
+            Text(user?.email ?: "N/A", color = TextGray, fontSize = 14.sp)
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Phone, contentDescription = null, tint = BlueMain, modifier = Modifier.size(20.dp))
-                    Text(user?.mobile ?: "No Phone", fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top=4.dp))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = BlueMain, modifier = Modifier.size(20.dp))
-                    Text("Joined ${user?.reg_date ?: "N/A"}", fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top=4.dp))
-                }
+                ProfileInfoChip(icon = Icons.Default.Phone, text = user?.mobile ?: "N/A")
+                ProfileInfoChip(icon = Icons.Default.CalendarToday, text = "Joined ${user?.reg_date ?: "N/A"}")
             }
         }
+    }
+}
+
+@Composable
+private fun ProfileInfoChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(
+        modifier = Modifier
+            .background(LightGrayBg, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = BlueMain, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF424242))
     }
 }
 
@@ -207,14 +214,16 @@ private fun ProfileStatBox(modifier: Modifier, value: String, label: String, ico
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFE0E0E0)),
-        shape = RoundedCornerShape(12.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(Modifier.padding(16.dp)) {
-            Icon(icon, null, tint = BlueMain)
-            Spacer(Modifier.height(8.dp))
-            Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp)
-            Text(label, color = TextGray, fontSize = 12.sp)
+            Box(modifier = Modifier.background(Color(0xFFE3F2FD), CircleShape).padding(8.dp)) {
+                Icon(icon, null, tint = BlueMain, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(value, fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = Color(0xFF1E1E1E))
+            Text(label, color = TextGray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -223,17 +232,37 @@ private fun ProfileStatBox(modifier: Modifier, value: String, label: String, ico
 private fun AdminProfileOrderCard(order: UniqueProfileOrder) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFEEEEEE)),
-        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(order.product_name ?: "Unknown", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = order.product_name ?: "Unknown",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = Color(0xFF1E1E1E),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
                 Text("Date: ${order.date}", color = TextGray, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(order.status ?: "Pending", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            Text(order.price ?: "₹0", fontWeight = FontWeight.ExtraBold, color = BlueMain)
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = order.price ?: "₹0",
+                fontWeight = FontWeight.ExtraBold,
+                color = BlueMain,
+                fontSize = 16.sp,
+                maxLines = 1
+            )
         }
     }
 }
@@ -243,15 +272,28 @@ private fun AdminProfileWarrantyCard(warranty: UniqueProfileWarranty) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF9FBE7)),
         border = BorderStroke(1.dp, Color(0xFFE6EE9C)),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(warranty.device_name ?: "Unknown", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text("Expires: ${warranty.expiry_date}", color = TextGray, fontSize = 12.sp)
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = warranty.device_name ?: "Unknown",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = Color(0xFF1E1E1E),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Expires: ${warranty.expiry_date}", color = TextGray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
-            Icon(Icons.Default.Verified, null, tint = Color(0xFF8BC34A))
+            Spacer(modifier = Modifier.width(16.dp))
+            Icon(Icons.Default.Verified, contentDescription = "Active", tint = Color(0xFF8BC34A), modifier = Modifier.size(32.dp))
         }
     }
 }

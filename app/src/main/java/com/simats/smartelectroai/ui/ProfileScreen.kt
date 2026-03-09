@@ -175,11 +175,6 @@ private fun PrivateAiProfileHeader(data: ProfileData?) {
             ) {
                 Image(painter = painterResource(id = R.drawable.profile), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             }
-            Box(
-                modifier = Modifier.background(AiGradient, CircleShape).border(2.dp, Color.White, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text("AI Member", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
-            }
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(data?.full_name ?: "AI Guest", fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Color(0xFF1E1E2C))

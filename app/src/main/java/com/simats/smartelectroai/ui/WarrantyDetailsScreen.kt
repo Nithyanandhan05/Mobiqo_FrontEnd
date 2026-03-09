@@ -34,6 +34,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import retrofit2.Call
 import retrofit2.Callback
@@ -82,9 +84,6 @@ fun WarrantyDetailsScreen(warrantyId: Int, onBack: () -> Unit, onNavigate: (Stri
                         if (response.isSuccessful) {
                             detailData = response.body()?.data
 
-                            // FIXED: Invert the progress so it FILLS UP as time passes!
-                            // API returns 1.0 for new (365 days left) and 0.0 for expired (0 days left).
-                            // Doing `1f - progress` means it starts at 0% and grows to 100%.
                             val apiProgress = detailData?.progress ?: 1f
                             targetProgress = (1f - apiProgress).coerceIn(0f, 1f)
                         }
@@ -133,7 +132,16 @@ fun WarrantyDetailsScreen(warrantyId: Int, onBack: () -> Unit, onNavigate: (Stri
                             else -> Icons.Default.Smartphone
                         }
                         Box(modifier = Modifier.size(120.dp).shadow(8.dp, RoundedCornerShape(20.dp)).background(Color.White, RoundedCornerShape(20.dp)), contentAlignment = Alignment.Center) {
-                            Icon(icon, contentDescription = null, tint = DetailBlueMain, modifier = Modifier.size(60.dp))
+                            if (!detailData!!.image_url.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = detailData!!.image_url,
+                                    contentDescription = detailData!!.device_name,
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)).padding(16.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            } else {
+                                Icon(icon, contentDescription = null, tint = DetailBlueMain, modifier = Modifier.size(60.dp))
+                            }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(detailData!!.device_name, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = DetailTextHeader)

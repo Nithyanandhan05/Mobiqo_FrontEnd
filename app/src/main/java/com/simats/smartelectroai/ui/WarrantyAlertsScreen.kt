@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import retrofit2.Call
 import retrofit2.Callback
@@ -52,10 +54,8 @@ private val AlertGradient = Brush.linearGradient(listOf(Color(0xFF1976D2), Color
 private val AlertTextDark = Color(0xFF1E1E1E)
 private val AlertTextGray = Color(0xFF757575)
 
-// FIXED: Changed Alert Cards to Red to match the rest of the app
 private val ExpiringBg = Color(0xFFFFEBEE)
 private val ExpiringText = Color(0xFFC62828)
-
 private val ExpiredBg = Color(0xFFEEEEEE)
 private val ExpiredText = Color(0xFF757575)
 
@@ -65,11 +65,8 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
     var responseData by remember { mutableStateOf<AlertResponse?>(null) }
-
-    // FIXED: Default filter is now "Alert" instead of "All"
     var selectedFilter by remember { mutableStateOf("Alert") }
 
-    // Animation visibility states
     var isTopVisible by remember { mutableStateOf(false) }
     var isListVisible by remember { mutableStateOf(false) }
 
@@ -125,7 +122,6 @@ fun WarrantyAlertsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                 // --- 2. FILTER CHIPS ---
                 AnimatedVisibility(visible = isTopVisible, enter = fadeIn()) {
-                    // FIXED: Moved "Alert" to the front of the list
                     val filters = listOf("Alert", "Expired", "All", "Secure")
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(vertical = 24.dp)) {
                         items(filters) { filter ->
@@ -254,8 +250,17 @@ private fun AnimatedExpiringCard(device: AlertDevice, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Box(modifier = Modifier.size(50.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF5F5F5)), contentAlignment = Alignment.Center) {
+                    if (!device.image_url.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = device.image_url,
+                            contentDescription = device.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                    }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -299,8 +304,17 @@ private fun AnimatedExpiredCard(device: AlertDevice, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Box(modifier = Modifier.size(50.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.LightGray, modifier = Modifier.size(24.dp))
+                Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF5F5F5)), contentAlignment = Alignment.Center) {
+                    if (!device.image_url.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = device.image_url,
+                            contentDescription = device.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(icon, null, tint = Color.LightGray, modifier = Modifier.size(24.dp))
+                    }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -340,8 +354,17 @@ private fun AnimatedSecureCard(device: AlertDevice, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, Color(0xFFF0F0F0))
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(50.dp).background(Color(0xFFF5F5F5), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF5F5F5)), contentAlignment = Alignment.Center) {
+                if (!device.image_url.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = device.image_url,
+                        contentDescription = device.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {

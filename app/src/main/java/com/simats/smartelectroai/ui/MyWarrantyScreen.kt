@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.simats.smartelectroai.api.MyWarrantiesResponse
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.WarrantyDevice
@@ -52,7 +54,7 @@ private val AlertOrangeBg = Color(0xFFFFF3E0)
 private val SecureGreen = Color(0xFF2E7D32)
 private val SecureGreenBg = Color(0xFFE8F5E9)
 
-// Expiring / Expired Status (ADDED RED COLORS FOR ALERTS)
+// Expiring / Expired Status
 private val AlertRed = Color(0xFFC62828)
 private val AlertRedBg = Color(0xFFFFEBEE)
 
@@ -68,7 +70,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var responseData by remember { mutableStateOf<MyWarrantiesResponse?>(null) }
 
-    // Visibility States for staggered animations
     var isTopBarVisible by remember { mutableStateOf(false) }
     var isStatsVisible by remember { mutableStateOf(false) }
     var isListVisible by remember { mutableStateOf(false) }
@@ -89,7 +90,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             })
         } else { isLoading = false }
 
-        // Staggered enter animations
         isTopBarVisible = true
         delay(150)
         isStatsVisible = true
@@ -117,7 +117,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             ) {
                 item { Spacer(modifier = Modifier.height(4.dp)) }
 
-                // 1. DYNAMIC STATS CARD
                 item {
                     AnimatedVisibility(visible = isStatsVisible, enter = scaleIn(initialScale = 0.9f) + fadeIn(tween(500))) {
                         val devices = responseData?.devices ?: emptyList()
@@ -130,7 +129,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                     }
                 }
 
-                // 2. HEADER
                 item {
                     AnimatedVisibility(visible = isListVisible, enter = fadeIn()) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +137,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                     }
                 }
 
-                // 3. DEVICE LIST
                 val devices = responseData?.devices ?: emptyList()
                 if (devices.isEmpty() && isListVisible) {
                     item {
@@ -158,7 +155,6 @@ fun MyWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                     }
                 }
 
-                // 4. AI RECOMMENDATION
                 item {
                     AnimatedVisibility(visible = isAiVisible, enter = expandVertically() + fadeIn(tween(600))) {
                         responseData?.ai_recommendation?.let { rec ->
@@ -269,7 +265,6 @@ private fun AnimatedDeviceCard(device: WarrantyDevice, onClick: () -> Unit) {
 
     val statLower = device.status.lowercase()
 
-    // UPDATED LOGIC: Alert & Expired are now Red. Pending is Orange.
     val (textColor, bgColor) = when {
         statLower == "secure" || statLower == "active" -> Pair(SecureGreen, SecureGreenBg)
         statLower.contains("alert") || statLower == "expired" || statLower == "rejected" -> Pair(AlertRed, AlertRedBg)
@@ -285,8 +280,17 @@ private fun AnimatedDeviceCard(device: WarrantyDevice, onClick: () -> Unit) {
         border = BorderStroke(1.dp, Color(0xFFF0F0F0)), elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(50.dp).background(Color(0xFFF8F9FA), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Box(modifier = Modifier.size(50.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFF8F9FA)), contentAlignment = Alignment.Center) {
+                if (!device.image_url.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = device.image_url,
+                        contentDescription = device.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {

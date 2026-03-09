@@ -62,7 +62,6 @@ import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.FcmTokenRequest
 import com.simats.smartelectroai.api.BaseResponse
 
-// 🚀 FIXED: CORRECT IMPORTS FOR THE NEW MVVM AUTHENTICATION SCREENS
 import com.simats.smartelectroai.ui.auth.RegisterScreen
 import com.simats.smartelectroai.ui.auth.SignInScreen
 import com.simats.smartelectroai.ui.auth.OtpVerificationScreen
@@ -71,7 +70,6 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
-// Global callback to pass Razorpay results to Compose Screens
 object PaymentCallbackHandler {
     var onSuccess: ((String, String, String) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
@@ -81,7 +79,6 @@ private val MainActivityBlue = Color(0xFF1976D2)
 
 class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
 
-    // 1. Declare the permission launcher for Push Notifications
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -96,10 +93,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 2. Ask for Notification Permissions (Required for Android 13+)
         askNotificationPermission()
-
-        // 🚀 3. NEW: SYNC THE FCM TOKEN TO FLASK WHEN THE APP OPENS
         syncFcmTokenToBackend()
 
         Checkout.preload(applicationContext)
@@ -131,9 +125,6 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
 
         setContent {
             SmartElectroAITheme {
-                // ==========================================
-                // 🚀 NAVIGATION BACK STACK
-                // ==========================================
                 var backStack by remember { mutableStateOf(listOf("Splash")) }
                 val currentScreen = backStack.lastOrNull() ?: "Splash"
 
@@ -185,7 +176,6 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                 onOnboardingFinished = { navigateTo("Login") }
                             )
 
-                            // 🚀 FIXED: NEW MVVM SIGN IN SCREEN
                             "Login" -> {
                                 Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                                     SignInScreen(
@@ -195,23 +185,20 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                             else navigateTo("Dashboard")
                                         },
                                         onSignUp = { navigateTo("Register") },
-                                        onForgotPassword = { navigateTo("ForgotPassword") } // 🚀 ADDED BACK
+                                        onForgotPassword = { navigateTo("ForgotPassword") }
                                     )
                                 }
                             }
 
-                            // 🚀 FIXED: NEW MVVM REGISTER SCREEN
                             "Register" -> {
                                 Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                                     RegisterScreen(
                                         onNavigateToOtp = { navigateTo("OtpVerification") },
                                         onLoginClick = { navigateBack() }
-                                        // 🚀 REMOVED onForgotPassword from here, it doesn't belong on the Register screen.
                                     )
                                 }
                             }
 
-                            // 🚀 FIXED: NEW OTP VERIFICATION ROUTE
                             "OtpVerification" -> {
                                 Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
                                     OtpVerificationScreen(
@@ -243,6 +230,9 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "AdminOrderManagement" -> OrderManagementScreen(onNavigate = { navigateTo(it) })
                             "AdminAiSettings" -> AiSettingsScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
                             "AdminWarranty" -> AdminWarrantyScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
+
+                            // 🚀 FIXED: ADDED THE MISSING ADMIN PAYMENT SCREEN ROUTE HERE
+                            "AdminPaymentScreen" -> AdminPaymentScreen(onNavigate = { navigateTo(it) })
 
                             "Dashboard" -> DashboardScreen(
                                 onAskAiAssistant = { navigateTo("AskAiAssistant") },
@@ -367,7 +357,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                         }
                     }
 
-                    // --- Floating Cart Logic ---
+                    // 🚀 FIXED: ADDED AdminPaymentScreen TO HIDE CART SCREENS
                     val hideCartScreens = setOf(
                         "Splash", "Welcome", "Onboarding", "Login", "Register", "OtpVerification", "ForgotPassword",
                         "MyCart", "Address", "Payment", "OrderSuccess",
@@ -376,7 +366,7 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                         "MyOrders", "SavedAddresses", "PaymentMethods", "Compare",
                         "CompareResult", "ChangePassword", "AdminDashboard", "AdminOrderManagement",
                         "AdminAiSettings", "AdminWarranty", "AdminUsers", "AdminViewProfileDetail",
-                        "ClaimWarranty", "ExtendWarranty"
+                        "ClaimWarranty", "ExtendWarranty", "AdminPaymentScreen"
                     )
 
                     if (realCartCount > 0 && currentScreen !in hideCartScreens) {
@@ -404,9 +394,6 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
         }
     }
 
-    // ==========================================
-    // 🔥 FCM TOKEN SYNC LOGIC
-    // ==========================================
     private fun syncFcmTokenToBackend() {
         val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val jwtToken = prefs.getString("jwt_token", null)

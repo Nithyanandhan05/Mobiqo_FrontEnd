@@ -84,18 +84,38 @@ data class UpdateOrderRequest(val status: String, val tracking_number: String)
 data class AiLogItem(val log_id: String, val preferences: String, val product: String, val match_percent: Int, val date: String)
 data class AiSettingsData(val is_enabled: Boolean, val gaming: Int, val camera: Int, val battery: Int, val budget: Int, val engine_mode: String, val logs: List<AiLogItem>)
 data class HistoryItem(val title: String, val date: String, val desc: String, val is_last: Boolean)
-data class WarrantyDetailData(val id: Int, val device_name: String, val device_type: String, val purchase_date: String, val expiry_date: String, val status: String, val progress: Float, val months_left: String, val invoice_name: String, val history: List<HistoryItem>)
+
+// FIXED: Added image_url
+data class WarrantyDetailData(val id: Int, val device_name: String, val device_type: String, val purchase_date: String, val expiry_date: String, val status: String, val progress: Float, val months_left: String, val invoice_name: String, val image_url: String? = null, val history: List<HistoryItem>)
 data class WarrantyDetailResponse(val status: String, val data: WarrantyDetailData?)
 data class AiSettingsResponse(val status: String, val data: AiSettingsData?)
 data class UpdateAiSettingsRequest(val is_enabled: Boolean, val gaming: Int, val camera: Int, val battery: Int, val budget: Int, val engine_mode: String)
-data class AdminWarrantyItem(val id: Int, val user_name: String, val device_name: String, val device_type: String, val expiry_date: String, val status: String, val claim_reason: String?, val claim_invoice_url: String?, val claim_device_url: String?)
+data class AdminWarrantyItem(
+    val id: Int,
+    val user_name: String,
+    val user_email: String?,
+    val user_phone: String?,
+    val device_name: String,
+    val device_type: String,
+    val purchase_date: String?,
+    val expiry_date: String,
+    val status: String,
+    val product_image_url: String?,
+    val claim_reason: String?,
+    val claim_invoice_url: String?,
+    val claim_device_url: String?
+)
 data class AdminWarrantyResponse(val status: String, val warranties: List<AdminWarrantyItem>)
 data class ApproveWarrantyRequest(val action: String)
-data class WarrantyDevice(val id: Int, val name: String, val status: String, val expiry: String)
+
+// FIXED: Added image_url
+data class WarrantyDevice(val id: Int, val name: String, val status: String, val expiry: String, val image_url: String? = null)
 data class AiRecommendation(val message: String)
 data class MyWarrantiesResponse(val status: String, val devices: List<WarrantyDevice>?, val ai_recommendation: AiRecommendation?)
 data class AlertStats(val total_registered: Int, val active: Int, val expiring_soon: Int, val expired: Int)
-data class AlertDevice(val id: Int, val name: String, val type: String, val expiry: String, val status: String)
+
+// FIXED: Added image_url
+data class AlertDevice(val id: Int, val name: String, val type: String, val expiry: String, val status: String, val image_url: String? = null)
 data class AlertResponse(val status: String, val stats: AlertStats?, val devices: List<AlertDevice>)
 data class AddWarrantyReq(val device_name: String, val brand: String, val expiry_date: String)
 data class AddWarrantyRes(val status: String, val message: String)

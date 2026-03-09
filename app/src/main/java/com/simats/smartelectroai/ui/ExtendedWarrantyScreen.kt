@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.razorpay.Checkout
 import org.json.JSONObject
 import kotlinx.coroutines.delay
@@ -296,7 +298,16 @@ fun PremiumDeviceCard(device: WarrantyDetailData?) {
         Box(modifier = Modifier.fillMaxWidth().background(Brush.horizontalGradient(listOf(Color.White, LightBlue.copy(alpha = 0.3f))))) {
             Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(56.dp).background(Brush.linearGradient(listOf(PrimaryBlue, DeepBlue)), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Smartphone, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    if (!device?.image_url.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = device?.image_url,
+                            contentDescription = device?.device_name,
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(Icons.Default.Smartphone, null, tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -337,7 +348,6 @@ fun PremiumPlanCard(plan: WarrantyPlan, isSelected: Boolean, onClick: () -> Unit
                 Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    // FIXED: Scaled down text and tightened padding to prevent text wrapping!
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = plan.title,

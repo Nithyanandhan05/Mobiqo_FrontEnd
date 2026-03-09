@@ -24,6 +24,11 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,13 +44,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.simats.smartelectroai.api.AdminWarrantyItem
 import com.simats.smartelectroai.api.AdminWarrantyResponse
 import com.simats.smartelectroai.api.ApproveWarrantyRequest
 import com.simats.smartelectroai.api.AuthResponse
 import com.simats.smartelectroai.api.RetrofitClient
-import com.simats.smartelectroai.api.ApiConfig // <-- IMPORT THE CENTROID
+import com.simats.smartelectroai.api.ApiConfig
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -68,6 +74,9 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
     var warranties by remember { mutableStateOf<List<AdminWarrantyItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+
+    // 🚀 NEW STATE: Controls the visibility of the details dialog
+    var selectedWarranty by remember { mutableStateOf<AdminWarrantyItem?>(null) }
 
     val visibleState = remember { MutableTransitionState(false) }
 
@@ -104,6 +113,14 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                         (filter == "active" && (stat == "secure" || stat == "active")) ||
                         (filter == "expired" && stat == "expired")
                 )
+    }
+
+    // 🚀 SHOW DIALOG IF A WARRANTY IS SELECTED
+    if (selectedWarranty != null) {
+        WarrantyDetailDialog(
+            item = selectedWarranty!!,
+            onDismiss = { selectedWarranty = null }
+        )
     }
 
     Scaffold(
@@ -163,7 +180,12 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                                 if (listItems.isEmpty()) Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Text("No warranties found.", color = Color.Gray, fontSize = 14.sp) }
 
                                 listItems.forEachIndexed { index, item ->
-                                    AnimatedWarrantyRow(item = item, index = index, visibleState = visibleState, onViewClick = { Toast.makeText(context, "Detail View for ${item.device_name} coming soon!", Toast.LENGTH_SHORT).show() })
+                                    AnimatedWarrantyRow(
+                                        item = item,
+                                        index = index,
+                                        visibleState = visibleState,
+                                        onViewClick = { selectedWarranty = item } // 🚀 TRIGGERS THE DIALOG
+                                    )
                                 }
                             }
                         }
@@ -193,6 +215,92 @@ fun AdminWarrantyScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     }
 }
 
+// ==========================================
+// 🚀 NEW: WARRANTY DETAIL POPUP DIALOG
+// ==========================================
+@Composable
+fun WarrantyDetailDialog(item: AdminWarrantyItem, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.fillMaxWidth().padding(24.dp)) {
+
+                // Title
+                Text("Warranty Details", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = AdminBlue)
+                Spacer(Modifier.height(20.dp))
+
+                // Product Image and Name
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(64.dp).background(BgGray, RoundedCornerShape(12.dp))) {
+                        AsyncImage(
+                            model = item.product_image_url?.let { if (it.startsWith("http")) it else "${ApiConfig.BASE_URL.trimEnd('/')}$it" },
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().padding(8.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(item.device_name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(item.device_type, fontSize = 12.sp, color = TextGray)
+                    }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 20.dp), color = Color(0xFFEEEEEE))
+
+                // User Details Section
+                Text("USER INFORMATION", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextGray, letterSpacing = 1.sp)
+                Spacer(Modifier.height(12.dp))
+                DialogDetailRow(icon = Icons.Outlined.Person, label = "Name", value = item.user_name)
+                Spacer(modifier = Modifier.height(12.dp))
+                DialogDetailRow(icon = Icons.Outlined.Email, label = "Email", value = item.user_email ?: "Data unavailable")
+                Spacer(modifier = Modifier.height(12.dp))
+                DialogDetailRow(icon = Icons.Outlined.Phone, label = "Phone", value = item.user_phone ?: "Data unavailable")
+
+                HorizontalDivider(Modifier.padding(vertical = 20.dp), color = Color(0xFFEEEEEE))
+
+                // Warranty Dates Section
+                Text("WARRANTY TIMELINE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextGray, letterSpacing = 1.sp)
+                Spacer(Modifier.height(12.dp))
+                DialogDetailRow(icon = Icons.Outlined.CalendarToday, label = "Purchased", value = item.purchase_date ?: "Data unavailable")
+                Spacer(modifier = Modifier.height(12.dp))
+                DialogDetailRow(icon = Icons.Outlined.EventAvailable, label = "Expires", value = item.expiry_date)
+
+                Spacer(Modifier.height(28.dp))
+
+                // Close Button
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AdminBlue)
+                ) {
+                    Text("Close Details", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+            }
+        }
+    }
+}
+
+// Helper Row for the Dialog
+@Composable
+fun DialogDetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = TextGray, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label, fontSize = 13.sp, color = TextGray, modifier = Modifier.width(70.dp))
+        Text(value, fontSize = 13.sp, color = TextDark, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+// ==========================================
+// REST OF THE EXISTING UI COMPONENTS
+// ==========================================
 @Composable
 fun AnimatedFilterChip(text: String, isSelected: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -283,8 +391,6 @@ fun AnimatedPendingClaimCard(claim: AdminWarrantyItem, index: Int, visibleState:
             confirmButton = { TextButton(onClick = { showImageDialog = null }) { Text("Close", color = AdminBlue) } },
             title = { Text("Attachment Preview") },
             text = {
-                // <-- USING THE CENTROID HERE FOR IMAGE LOADING -->
-                // TrimEnd ensures we don't end up with a double slash if showImageDialog starts with one
                 val safeBaseUrl = ApiConfig.BASE_URL.trimEnd('/')
 
                 AsyncImage(
