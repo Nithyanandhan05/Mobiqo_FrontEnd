@@ -138,8 +138,8 @@ fun PaymentScreen(onBack: () -> Unit = {}, onPaymentSuccess: () -> Unit = {}) {
                 FloatingAiPayButton(
                     amount = targetPrice,
                     isProcessing = isProcessing,
+                    selectedMethod = selectedMethod, // PASSED SELECTED METHOD HERE
                     onPay = {
-                        // Validation with specific error messages
                         if (token.isEmpty()) {
                             Toast.makeText(context, "Error: User not logged in (Token missing)", Toast.LENGTH_SHORT).show()
                             return@FloatingAiPayButton
@@ -153,30 +153,57 @@ fun PaymentScreen(onBack: () -> Unit = {}, onPaymentSuccess: () -> Unit = {}) {
                         isProcessing = true
 
                         // =====================================
-                        // 🚀 LAUNCH RAZORPAY
+                        // 🚀 CHECK WHICH METHOD IS SELECTED
                         // =====================================
-                        try {
-                            val checkout = Checkout()
-                            checkout.setKeyID(com.simats.smartelectroai.api.AppConfig.RAZORPAY_KEY_ID)
+                        if (selectedMethod == "cod") {
+                            // --- CASH ON DELIVERY LOGIC ---
+                            val request = PaymentRequest(
+                                order_id = OrderContext.currentOrderId,
+                                payment_method = "Cash on Delivery",
+                                amount = targetPrice.toString()
+                            )
 
-                            val options = JSONObject()
-                            options.put("name", "Smart Electro AI")
-                            options.put("description", "Order #${OrderContext.currentOrderId}")
-                            options.put("theme.color", "#2962FF")
-                            options.put("currency", "INR")
-                            options.put("amount", (targetPrice * 100).toInt()) // Amount in paise
+                            RetrofitClient.instance.processPayment("Bearer $token", request).enqueue(object : Callback<PaymentResponse> {
+                                override fun onResponse(call: Call<PaymentResponse>, response: Response<PaymentResponse>) {
+                                    isProcessing = false
+                                    if (response.isSuccessful && response.body()?.status == "success") {
+                                        Toast.makeText(context, "Order Confirmed via COD!", Toast.LENGTH_LONG).show()
+                                        onPaymentSuccess()
+                                    } else {
+                                        Toast.makeText(context, "Failed to confirm COD order.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                override fun onFailure(call: Call<PaymentResponse>, t: Throwable) {
+                                    isProcessing = false
+                                    Toast.makeText(context, "Network Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            })
 
-                            val prefill = JSONObject()
-                            prefill.put("email", "user@smartelectro.com")
-                            prefill.put("contact", "9999999999")
-                            options.put("prefill", prefill)
+                        } else {
+                            // --- RAZORPAY LOGIC ---
+                            try {
+                                val checkout = Checkout()
+                                checkout.setKeyID(com.simats.smartelectroai.api.AppConfig.RAZORPAY_KEY_ID)
 
-                            checkout.open(activity, options)
+                                val options = JSONObject()
+                                options.put("name", "Smart Electro AI")
+                                options.put("description", "Order #${OrderContext.currentOrderId}")
+                                options.put("theme.color", "#2962FF")
+                                options.put("currency", "INR")
+                                options.put("amount", (targetPrice * 100).toInt()) // Amount in paise
 
-                        } catch (e: Exception) {
-                            isProcessing = false
-                            Toast.makeText(context, "Error init Razorpay: ${e.message}", Toast.LENGTH_LONG).show()
-                            e.printStackTrace()
+                                val prefill = JSONObject()
+                                prefill.put("email", "user@smartelectro.com")
+                                prefill.put("contact", "9999999999")
+                                options.put("prefill", prefill)
+
+                                checkout.open(activity, options)
+
+                            } catch (e: Exception) {
+                                isProcessing = false
+                                Toast.makeText(context, "Error init Razorpay: ${e.message}", Toast.LENGTH_LONG).show()
+                                e.printStackTrace()
+                            }
                         }
                     }
                 )
@@ -275,7 +302,7 @@ fun AiOrderSummary(targetPrice: Float) {
 }
 
 @Composable
-fun FloatingAiPayButton(amount: Float, isProcessing: Boolean, onPay: () -> Unit) {
+fun FloatingAiPayButton(amount: Float, isProcessing: Boolean, selectedMethod: String, onPay: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().padding(16.dp).shadow(16.dp, RoundedCornerShape(24.dp), spotColor = AiBlue), shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Button(
@@ -287,9 +314,15 @@ fun FloatingAiPayButton(amount: Float, isProcessing: Boolean, onPay: () -> Unit)
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Pay ₹${amount.toInt()}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            if (selectedMethod == "cod") {
+                                Icon(Icons.Default.LocalShipping, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Confirm COD Order", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            } else {
+                                Icon(Icons.Default.Lock, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Pay ₹${amount.toInt()}", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                            }
                         }
                     }
                 }

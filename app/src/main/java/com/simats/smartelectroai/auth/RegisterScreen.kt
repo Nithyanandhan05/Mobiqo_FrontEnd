@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.simats.smartelectroai.api.RegisterRequest
 import com.simats.smartelectroai.utils.UiState
 import com.simats.smartelectroai.utils.ValidationUtils
@@ -60,8 +62,43 @@ fun RegisterScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp).verticalScroll(rememberScrollState())) {
-        Spacer(modifier = Modifier.height(24.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+
+        // 🚀 ADDED: Top Row with the two College Logos
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            // Left Logo
+            AsyncImage(
+                model = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQzSASJ8CW7h0pmb79FrMdRMp73kQ96SnFPg&s",
+                contentDescription = "College Logo Left",
+                modifier = Modifier
+                    .height(60.dp)
+                    .widthIn(max = 120.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            // Right Logo
+            AsyncImage(
+                model = "https://simatscgpa.netlify.app/logo2.png",
+                contentDescription = "College Logo Right",
+                modifier = Modifier
+                    .height(60.dp)
+                    .widthIn(max = 120.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+
         Text("Create Account", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
         Text("Join the SmartElectro platform", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 24.dp))
 
@@ -130,5 +167,18 @@ fun RegisterScreen(
             Text("Already have an account?", color = Color.Gray)
             TextButton(onClick = onLoginClick) { Text("Login", color = Color(0xFF2874F0), fontWeight = FontWeight.Bold) }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 🚀 ADDED: Powered by Text at the absolute bottom
+        Text(
+            text = "Powered by SIMATS Engineering",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color(0xFF9E9E9E),
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 16.dp)
+        )
     }
 }

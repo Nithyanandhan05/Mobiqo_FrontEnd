@@ -16,7 +16,7 @@ import okhttp3.RequestBody
 // update across the ENTIRE Android application.
 // ==========================================
 object ApiConfig {
-    const val BASE_URL = "http://10.79.196.213:5000/"
+    const val BASE_URL = "http://10.19.67.161:5000/"
 }
 
 // --- DATA MODELS ---
@@ -42,6 +42,26 @@ data class OrderHistoryItem(
     val delivery_status: String?, val delivery_step: Int, val delivery_text: String?,
     val status_color: String, val delivery_name: String?, val delivery_address: String?,
     val delivery_phone: String?, val payment_method: String?
+)
+// Add this new data class for detailed scanner results
+data class ScanDeviceData(
+    val id: Int,
+    val name: String,
+    val price: String,
+    val match_percent: String,
+    val battery_spec: String,
+    val display_spec: String,
+    val processor_spec: String,
+    val camera_spec: String,
+    val category: String,
+    val image_url: String?
+)
+
+// Update your ScanResponse to use the new ScanDeviceData
+data class ScanResponse(
+    val status: String,
+    val message: String?,
+    val device: ScanDeviceData?
 )
 data class MyOrdersResponse(val status: String, val orders: List<OrderHistoryItem>)
 data class ProfileData(val full_name: String, val email: String, val mobile: String, val total_orders: Int, val saved_addresses: Int, val active_warranties: Int, val ai_searches: Int)
@@ -171,6 +191,12 @@ interface ApiService {
     @PUT("/admin/warranties/{id}/approve") fun approveAdminWarranty(@Header("Authorization") token: String, @Path("id") warrantyId: Int, @Body request: ApproveWarrantyRequest): Call<AuthResponse>
     @GET("/admin/payments") fun getAdminPayments(@Header("Authorization") token: String): Call<AdminPaymentsResponse>
     @PUT("/admin/payments/{id}/refund") fun refundPayment(@Header("Authorization") token: String, @Path("id") id: Int): Call<SimpleResponse>
+    @Multipart
+    @POST("/api/scan_device")
+    fun scanDevice(
+        @Header("Authorization") token: String,
+        @Part image: MultipartBody.Part
+    ): Call<ScanResponse>
 }
 
 // --- SINGLETON CLIENT ---

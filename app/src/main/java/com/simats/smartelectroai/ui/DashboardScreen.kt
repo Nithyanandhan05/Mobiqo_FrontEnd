@@ -15,7 +15,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -93,27 +92,13 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                     Log.e("FCM_SYNC", "Fetching FCM registration token failed", task.exception)
                     return@addOnCompleteListener
                 }
-
-                // Get new FCM registration token directly from Firebase
                 val fcmToken = task.result
-
-                // Send it to your backend
                 RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", FcmTokenRequest(fcmToken))
                     .enqueue(object : Callback<BaseResponse> {
-                        override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
-                            if (response.isSuccessful) {
-                                Log.d("FCM_SYNC", "✅ Token successfully synced with backend: $fcmToken")
-                            } else {
-                                Log.e("FCM_SYNC", "❌ Failed to sync token: ${response.code()}")
-                            }
-                        }
-                        override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
-                            Log.e("FCM_SYNC", "❌ Network error syncing token: ${t.message}")
-                        }
+                        override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {}
+                        override fun onFailure(call: Call<BaseResponse>, t: Throwable) {}
                     })
             }
-        } else {
-            Log.w("FCM_SYNC", "⚠️ Skipping sync: JWT Token is missing.")
         }
 
         // 2. FETCH TOP PRODUCTS
@@ -139,7 +124,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
     var isHeaderVisible by remember { mutableStateOf(false) }
     var isSearchVisible by remember { mutableStateOf(false) }
     var isAiCardVisible by remember { mutableStateOf(false) }
-    var isChipsVisible by remember { mutableStateOf(false) }
     var isProductsVisible by remember { mutableStateOf(false) }
     var isWarrantyVisible by remember { mutableStateOf(false) }
 
@@ -147,7 +131,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
         delay(100); isHeaderVisible = true
         delay(150); isSearchVisible = true
         delay(150); isAiCardVisible = true
-        delay(150); isChipsVisible = true
         delay(150); isProductsVisible = true
         delay(150); isWarrantyVisible = true
     }
@@ -170,7 +153,9 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            AnimatedVisibility(visible = isHeaderVisible, enter = slideInVertically { -50 } + fadeIn(tween(500))) { AnimatedGreetingHeader(onNavigate) }
+            AnimatedVisibility(visible = isHeaderVisible, enter = slideInVertically { -50 } + fadeIn(tween(500))) {
+                AnimatedGreetingHeader(onNavigate)
+            }
 
             AnimatedVisibility(visible = isSearchVisible, enter = scaleIn(initialScale = 0.95f) + fadeIn(tween(500))) {
                 AnimatedSearchBar(
@@ -178,11 +163,9 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                     onSearch = { searchQuery ->
                         isSearchingGlobal = true
 
-                        // 1. CHECK LOCAL DATABASE FIRST
                         val localMatch = topProducts.find { it.name?.contains(searchQuery, ignoreCase = true) == true }
 
                         if (localMatch != null) {
-                            // Instant Load from DB
                             isSearchingGlobal = false
                             val safePrice = if (localMatch.price == "0" || localMatch.price == "0.0") "45000" else localMatch.price
 
@@ -204,7 +187,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                             )
                             onNavigate("ProductDetail")
                         } else {
-                            // 2. FETCH FROM INTERNET IF NOT IN DB
                             RetrofitClient.instance.searchDevices(searchQuery).enqueue(object : Callback<SearchDeviceResponse> {
                                 override fun onResponse(call: Call<SearchDeviceResponse>, response: Response<SearchDeviceResponse>) {
                                     isSearchingGlobal = false
@@ -246,8 +228,9 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                 )
             }
 
-            AnimatedVisibility(visible = isAiCardVisible, enter = slideInHorizontally { -50 } + fadeIn(tween(600))) { AnimatedAiAssistantCard(onClick = onAskAiAssistant) }
-            AnimatedVisibility(visible = isChipsVisible, enter = slideInHorizontally { 50 } + fadeIn(tween(500))) { AnimatedCategoryChips() }
+            AnimatedVisibility(visible = isAiCardVisible, enter = slideInHorizontally { -50 } + fadeIn(tween(600))) {
+                AnimatedAiAssistantCard(onClick = onAskAiAssistant)
+            }
 
             AnimatedVisibility(visible = isProductsVisible, enter = slideInVertically { 50 } + fadeIn(tween(700))) {
                 Column {
@@ -293,7 +276,9 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                 }
             }
 
-            AnimatedVisibility(visible = isWarrantyVisible, enter = slideInHorizontally { 100 } + fadeIn(tween(800))) { AnimatedWarrantyCard { onNavigate("Warranty") } }
+            AnimatedVisibility(visible = isWarrantyVisible, enter = slideInHorizontally { 100 } + fadeIn(tween(800))) {
+                AnimatedWarrantyCard { onNavigate("Warranty") }
+            }
 
             Spacer(modifier = Modifier.height(100.dp))
         }
@@ -301,7 +286,7 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
 }
 
 // ==========================================
-// 1. GREETING HEADER
+// 1. GREETING HEADER (MODIFIED FOR SCANNER)
 // ==========================================
 @Composable
 private fun AnimatedGreetingHeader(onNavigate: (String) -> Unit) {
@@ -311,8 +296,22 @@ private fun AnimatedGreetingHeader(onNavigate: (String) -> Unit) {
             Spacer(modifier = Modifier.height(4.dp))
             Text("AI is ready to assist you today", color = PrimaryBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
         }
-        Box(modifier = Modifier.size(48.dp).clip(CircleShape).background(LightBlue).clickable { onNavigate("Profile") }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Person, contentDescription = "Profile", tint = PrimaryBlue, modifier = Modifier.size(24.dp))
+
+        // REPLACED PROFILE ICON WITH SCAN LENS ICON
+        val scanInteraction = remember { MutableInteractionSource() }
+        val isPressed by scanInteraction.collectIsPressedAsState()
+        val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, label = "")
+
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .scale(scale)
+                .clip(CircleShape)
+                .background(LightBlue)
+                .clickable(interactionSource = scanInteraction, indication = null) { onNavigate("ScanDevice") },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.CameraAlt, contentDescription = "Scan Device", tint = PrimaryBlue, modifier = Modifier.size(24.dp))
         }
     }
 }
@@ -352,8 +351,8 @@ private fun AnimatedSearchBar(isSearching: Boolean, onSearch: (String) -> Unit) 
             keyboardActions = KeyboardActions(
                 onSearch = {
                     if (query.trim().length >= 2) {
-                        focusManager.clearFocus() // Hide keyboard
-                        onSearch(query.trim()) // Trigger API Call
+                        focusManager.clearFocus()
+                        onSearch(query.trim())
                     }
                 }
             ),
@@ -400,32 +399,6 @@ private fun AnimatedAiAssistantCard(onClick: () -> Unit) {
 }
 
 // ==========================================
-// 4. CATEGORY CHIPS
-// ==========================================
-@Composable
-private fun AnimatedCategoryChips() {
-    val categories = listOf("All", "Gaming", "Camera", "Battery", "Budget")
-    var selectedCategory by remember { mutableStateOf("All") }
-
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        itemsIndexed(categories) { _, category ->
-            val isSelected = selectedCategory == category
-            val interactionSource = remember { MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-
-            val bgColor by animateColorAsState(if (isSelected) PrimaryBlue else BgWhite, tween(300), label = "")
-            val txtColor by animateColorAsState(if (isSelected) BgWhite else GrayText, tween(300), label = "")
-            val chipScale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = Spring.DampingRatioLowBouncy), label = "")
-
-            Box(
-                modifier = Modifier.scale(chipScale).clip(RoundedCornerShape(50)).background(bgColor).border(if (!isSelected) 1.dp else 0.dp, if (!isSelected) Color(0xFFE0E0E0) else Color.Transparent, RoundedCornerShape(50)).clickable(interactionSource = interactionSource, indication = null) { selectedCategory = category }.padding(horizontal = 24.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) { Text(category, color = txtColor, fontWeight = FontWeight.Bold, fontSize = 14.sp) }
-        }
-    }
-}
-
-// ==========================================
 // 5. PRODUCT CARD
 // ==========================================
 @Composable
@@ -436,13 +409,10 @@ private fun AnimatedProductCard(name: String, price: String, imageUrl: String?, 
     val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "")
     val elevation by animateDpAsState(if (isPressed) 2.dp else 8.dp, label = "")
 
-    val infiniteTransition = rememberInfiniteTransition(label = "")
-    val alpha by infiniteTransition.animateFloat(initialValue = 0.7f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse), label = "")
-
     Card(modifier = Modifier.width(160.dp).scale(scale).shadow(elevation, RoundedCornerShape(20.dp)).clickable(interactionSource = interactionSource, indication = null) { onClick() }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = BgWhite)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Box(modifier = Modifier.background(MatchGreenBg, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text("$match Match", color = MatchGreenText.copy(alpha = alpha), fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                Text("$match Match", color = MatchGreenText, fontWeight = FontWeight.Bold, fontSize = 10.sp)
             }
             Spacer(modifier = Modifier.height(12.dp))
 

@@ -22,14 +22,20 @@ class CompareViewModel : ViewModel() {
     private val _searchResults = MutableStateFlow<List<SearchDeviceResult>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
 
+    // NEW: Track the loading state of the search operation
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching = _isSearching.asStateFlow()
+
     private var lastComparedDevices: List<String> = emptyList()
 
-    // FIXED: Allow blank queries to pass through so we can fetch "Trending Devices"
     fun searchDevice(query: String) {
         val finalQuery = if (query.isBlank()) "a" else query
 
+        _isSearching.value = true // Trigger loading animation
+
         RetrofitClient.instance.searchDevices(finalQuery).enqueue(object : Callback<SearchDeviceResponse> {
             override fun onResponse(call: Call<SearchDeviceResponse>, response: Response<SearchDeviceResponse>) {
+                _isSearching.value = false // Stop loading animation
                 if (response.isSuccessful && response.body()?.status == "success") {
                     _searchResults.value = response.body()?.results ?: emptyList()
                 } else {
@@ -37,6 +43,7 @@ class CompareViewModel : ViewModel() {
                 }
             }
             override fun onFailure(call: Call<SearchDeviceResponse>, t: Throwable) {
+                _isSearching.value = false // Stop loading animation
                 _searchResults.value = emptyList()
             }
         })

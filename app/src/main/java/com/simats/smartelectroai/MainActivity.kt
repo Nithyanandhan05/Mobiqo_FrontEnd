@@ -247,6 +247,10 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                     navigateTo(target)
                                 }
                             )
+                            "ScanDevice" -> ScanDeviceScreen(
+                                onBack = { navigateBack() },
+                                onNavigate = { navigateTo(it) }
+                            )
 
                             "AskAiAssistant" -> AskAiAssistantScreen(onBack = { navigateBack() }, onGenerate = { navigateTo("AiRecommendation") })
                             "AiRecommendation" -> AiRecommendationScreen(

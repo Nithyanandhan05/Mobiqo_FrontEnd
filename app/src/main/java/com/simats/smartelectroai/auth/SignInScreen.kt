@@ -3,7 +3,7 @@ package com.simats.smartelectroai.ui.auth
 import android.content.Context
 import android.widget.Toast
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.Image // 🚀 IMPORTED IMAGE FOR FULL COLOR LOGO
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.simats.smartelectroai.R
 import com.simats.smartelectroai.api.LoginRequest
 import com.simats.smartelectroai.utils.UiState
@@ -41,7 +43,7 @@ fun SignInScreen(
     viewModel: AuthViewModel = viewModel(),
     onSignIn: (Boolean) -> Unit,
     onSignUp: () -> Unit,
-    onForgotPassword: () -> Unit // 🚀 ADDED FORGOT PASSWORD PARAMETER
+    onForgotPassword: () -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
@@ -75,22 +77,54 @@ fun SignInScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.White)
-            .padding(24.dp)
+            .imePadding() // Keeps scrolling smooth when keyboard is open
+            .padding(horizontal = 24.dp)
             .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // 🚀 CHANGED TO IMAGE AND INCREASED SIZE TO 180.dp
-        Image(
-            painter = painterResource(id = R.drawable.logo),
-            contentDescription = "Logo",
-            modifier = Modifier.size(180.dp)
-        )
+        Spacer(modifier = Modifier.height(32.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // Top Row with the two College Logos
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            AsyncImage(
+                model = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQzSASJ8CW7h0pmb79FrMdRMp73kQ96SnFPg&s",
+                contentDescription = "College Logo Left",
+                modifier = Modifier.height(55.dp).widthIn(max = 110.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            AsyncImage(
+                model = "https://simatscgpa.netlify.app/logo2.png",
+                contentDescription = "College Logo Right",
+                modifier = Modifier.height(55.dp).widthIn(max = 110.dp),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        // 🚀 THE FIX: Box limits vertical space, but allows the Image to be huge!
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp), // Strictly limits the layout space to remove the gap
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.logo),
+                contentDescription = "Main App Logo",
+                modifier = Modifier.size(280.dp), // Makes the actual graphic massive
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        // Text is now pulled straight up against the visible logo
         Text("Welcome Back", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
         Text("Sign in to continue", fontSize = 14.sp, color = Color.Gray)
+
         Spacer(modifier = Modifier.height(32.dp))
 
         OutlinedTextField(
@@ -102,6 +136,7 @@ fun SignInScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             singleLine = true
         )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
@@ -120,7 +155,6 @@ fun SignInScreen(
             }
         )
 
-        // 🚀 FORGOT PASSWORD BUTTON ADDED HERE
         TextButton(
             onClick = onForgotPassword,
             modifier = Modifier.align(Alignment.End)
@@ -171,10 +205,20 @@ fun SignInScreen(
             Icon(Icons.Default.Fingerprint, contentDescription = "Biometric", tint = Color(0xFF2874F0), modifier = Modifier.size(36.dp))
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(48.dp))
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Don't have an account?", color = Color.Gray)
             TextButton(onClick = onSignUp) { Text("Sign Up", color = Color(0xFF2874F0), fontWeight = FontWeight.Bold) }
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Powered by SIMATS Engineering",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color(0xFF9E9E9E),
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
     }
 }
