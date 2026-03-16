@@ -11,8 +11,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -37,7 +38,6 @@ import com.simats.smartelectroai.api.RetrofitClient
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,7 +52,8 @@ fun AskAiAssistantScreen(
 
     var budget by remember { mutableFloatStateOf(30000f) }
     var selectedUsage by remember { mutableStateOf("Gaming") }
-    var selectedBrand by remember { mutableStateOf("Any") }
+    // 🚀 MODIFIED: Brand is now a Set to allow multiple selections
+    var selectedBrands by remember { mutableStateOf(setOf<String>()) }
     var selectedStorage by remember { mutableStateOf("128GB") }
     var batteryPreference by remember { mutableStateOf("Standard") }
     var notes by remember { mutableStateOf("") }
@@ -102,7 +103,10 @@ fun AskAiAssistantScreen(
                         Button(
                             onClick = {
                                 isLoading = true
-                                val request = AiRequest(budget, selectedUsage, selectedBrand, selectedStorage, batteryPreference, notes)
+                                // 🚀 Format the brands into a comma-separated string for the API
+                                val brandString = if (selectedBrands.isEmpty()) "Any" else selectedBrands.joinToString(", ")
+
+                                val request = AiRequest(budget, selectedUsage, brandString, selectedStorage, batteryPreference, notes)
 
                                 RetrofitClient.instance.getRecommendations(request).enqueue(object : Callback<AiResponse> {
                                     override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
@@ -117,7 +121,6 @@ fun AskAiAssistantScreen(
                                                     Toast.makeText(context, "API Error: ${body?.message ?: "Unknown"}", Toast.LENGTH_LONG).show()
                                                 }
                                             } else {
-                                                // PROPER ERROR HANDLING
                                                 val errorString = response.errorBody()?.string() ?: "Unknown error"
                                                 Toast.makeText(context, "Server Error ${response.code()}: $errorString", Toast.LENGTH_LONG).show()
                                             }
@@ -179,7 +182,18 @@ fun AskAiAssistantScreen(
                     when (step) {
                         0 -> StepOneBudget(budget) { budget = it }
                         1 -> StepTwoUsage(selectedUsage) { selectedUsage = it }
-                        2 -> StepThreeBrand(selectedBrand) { selectedBrand = it }
+                        2 -> StepThreeBrand(
+                            selectedBrands = selectedBrands,
+                            onBrandToggle = { brand ->
+                                val newSet = selectedBrands.toMutableSet()
+                                if (brand == "Any") {
+                                    newSet.clear()
+                                } else {
+                                    if (newSet.contains(brand)) newSet.remove(brand) else newSet.add(brand)
+                                }
+                                selectedBrands = newSet
+                            }
+                        )
                         3 -> StepFourDetails(
                             selectedStorage = selectedStorage,
                             batteryPreference = batteryPreference,
@@ -196,15 +210,17 @@ fun AskAiAssistantScreen(
 }
 
 // ==========================================
-// STEP 1: REDESIGNED BUDGET UI
+// STEP 1: CUSTOM BUDGET SUPPORT
 // ==========================================
 @Composable
 fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
+    var customBudgetInput by remember { mutableStateOf(if (currentBudget > 0 && currentBudget !in listOf(15000f, 30000f, 60000f, 100000f)) currentBudget.toInt().toString() else "") }
+
     Text("What is your budget range?", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     Spacer(modifier = Modifier.height(8.dp))
-    Text("Choose a price category that suits you best", color = Color.Gray, fontSize = 14.sp)
+    Text("Choose a category or enter a custom amount", color = Color.Gray, fontSize = 14.sp)
 
-    Spacer(modifier = Modifier.height(32.dp))
+    Spacer(modifier = Modifier.height(24.dp))
 
     val budgetOptions = listOf(
         BudgetOption("Budget Phone", "Under ₹15,000", Icons.Outlined.AccountBalanceWallet, 15000f),
@@ -217,7 +233,7 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
         columns = GridCells.Fixed(2),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.height(400.dp)
+        modifier = Modifier.height(280.dp)
     ) {
         items(budgetOptions) { option ->
             val isSelected = currentBudget == option.apiValue
@@ -227,8 +243,11 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
                 border = BorderStroke(1.dp, if (isSelected) Color(0xFF1A73E8) else Color(0xFFEEEEEE)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(0.9f)
-                    .clickable { onBudgetSelect(option.apiValue) },
+                    .aspectRatio(1.2f)
+                    .clickable {
+                        customBudgetInput = "" // Clear custom input if predefined is selected
+                        onBudgetSelect(option.apiValue)
+                    },
                 elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 0.dp)
             ) {
                 Column(
@@ -240,27 +259,50 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
                         imageVector = option.icon,
                         contentDescription = option.title,
                         tint = if (isSelected) Color.White else Color(0xFF1A73E8),
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = option.title,
                         fontWeight = FontWeight.Bold,
                         color = if (isSelected) Color.White else Color.Black,
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = option.subtitle,
                         color = if (isSelected) Color.White.copy(alpha = 0.8f) else Color.Gray,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         textAlign = TextAlign.Center
                     )
                 }
             }
         }
     }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    // 🚀 ADDED: Custom Budget Input
+    OutlinedTextField(
+        value = customBudgetInput,
+        onValueChange = {
+            customBudgetInput = it
+            val floatVal = it.toFloatOrNull()
+            if (floatVal != null) {
+                onBudgetSelect(floatVal)
+            }
+        },
+        label = { Text("Or enter custom budget (₹)") },
+        placeholder = { Text("e.g. 25000") },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Color(0xFF1A73E8),
+            unfocusedBorderColor = Color(0xFFE0E0E0)
+        )
+    )
 }
 
 data class BudgetOption(val title: String, val subtitle: String, val icon: ImageVector, val apiValue: Float)
@@ -296,17 +338,18 @@ fun StepTwoUsage(selectedUsage: String, onUsageSelect: (String) -> Unit) {
     }
 }
 
+// 🚀 MODIFIED: Accepts a Set of selected brands and toggles them
 @Composable
-fun StepThreeBrand(selectedBrand: String, onBrandSelect: (String) -> Unit) {
+fun StepThreeBrand(selectedBrands: Set<String>, onBrandToggle: (String) -> Unit) {
     val brands = listOf(
         "Any", "Samsung", "Apple", "OnePlus",
         "Xiaomi", "Vivo", "Oppo", "Google",
         "Motorola", "Realme", "Poco", "iQOO"
     )
 
-    Text("Preferred Brand", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Text("Preferred Brands", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     Spacer(modifier = Modifier.height(8.dp))
-    Text("Select a brand or choose 'Any'", color = Color.Gray, fontSize = 14.sp)
+    Text("Select multiple brands, or choose 'Any'", color = Color.Gray, fontSize = 14.sp)
     Spacer(modifier = Modifier.height(24.dp))
 
     LazyVerticalGrid(
@@ -316,11 +359,11 @@ fun StepThreeBrand(selectedBrand: String, onBrandSelect: (String) -> Unit) {
         modifier = Modifier.height(400.dp)
     ) {
         items(brands) { brand ->
-            val isSelected = selectedBrand == brand
+            val isSelected = selectedBrands.contains(brand) || (brand == "Any" && selectedBrands.isEmpty())
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF5F5F5)),
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onBrandSelect(brand) },
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onBrandToggle(brand) },
                 elevation = CardDefaults.cardElevation(if (isSelected) 4.dp else 0.dp)
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

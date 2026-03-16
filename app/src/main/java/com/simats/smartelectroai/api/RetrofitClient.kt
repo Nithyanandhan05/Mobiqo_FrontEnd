@@ -16,7 +16,7 @@ import okhttp3.RequestBody
 // update across the ENTIRE Android application.
 // ==========================================
 object ApiConfig {
-    const val BASE_URL = "http://10.19.67.161:5000/"
+    const val BASE_URL = "http://10.100.2.213:5000/"
 }
 
 // --- DATA MODELS ---
