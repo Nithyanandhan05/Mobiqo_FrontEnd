@@ -28,7 +28,7 @@ import coil.compose.AsyncImage
 import com.simats.smartelectroai.api.OrderTrackingManager
 import kotlinx.coroutines.delay
 import android.util.Log
-import androidx.compose.runtime.LaunchedEffect
+
 private val AmzGreen = Color(0xFF067D62)
 private val AmzGray = Color(0xFF565959)
 private val AmzBorder = Color(0xFFD5D9D9)
@@ -52,7 +52,31 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
         Log.d("SCREEN", "OrderInvoiceScreen opened")
     }
 
-    val order = OrderTrackingManager.currentOrder ?: return
+    val order = OrderTrackingManager.currentOrder
+
+    // 🚀 FIXED: Handle null order gracefully instead of returning a blank screen
+    if (order == null) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Order Details") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                    }
+                )
+            }
+        ) { padding ->
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = AmzGreen)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Loading order details...", color = AmzGray)
+                    // Note: If it stays stuck here, it means OrderTrackingManager.currentOrder was never set!
+                }
+            }
+        }
+        return
+    }
 
     val statusTitle = when {
         order.status.contains("deliver", true) -> "Delivered"
@@ -62,10 +86,7 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
     }
 
     val activeStep = titleToStep(statusTitle)
-
-    val price =
-        order.raw_price ?: order.price.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0
-
+    val price = order.raw_price ?: order.price.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0
     val listingPrice = price * 1.15
     val discount = listingPrice - price
     val fees = 39.0
@@ -88,21 +109,13 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-
         Column(
             modifier = Modifier
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-
             // HEADER
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(20.dp)
-            ) {
-
+            Column(Modifier.fillMaxWidth().background(Color.White).padding(20.dp)) {
                 Text(
                     statusTitle,
                     fontSize = 24.sp,
@@ -112,26 +125,12 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
             }
 
             HorizontalOrderTracker(activeStep)
-
             Spacer(Modifier.height(8.dp))
 
             // PRODUCT
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(16.dp)
-            ) {
-
+            Column(Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-
-                    Box(
-                        Modifier
-                            .size(80.dp)
-                            .border(1.dp, AmzBorder, RoundedCornerShape(8.dp))
-                            .padding(8.dp)
-                    ) {
-
+                    Box(Modifier.size(80.dp).border(1.dp, AmzBorder, RoundedCornerShape(8.dp)).padding(8.dp)) {
                         AsyncImage(
                             model = order.image_url,
                             contentDescription = null,
@@ -139,73 +138,40 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
                             contentScale = ContentScale.Fit
                         )
                     }
-
                     Spacer(Modifier.width(16.dp))
-
                     Column(Modifier.weight(1f)) {
-
                         Text(order.product_name)
-
                         Spacer(Modifier.height(6.dp))
-
-                        Text(
-                            "₹${price.toInt()}",
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text("₹${price.toInt()}", fontWeight = FontWeight.Bold)
                     }
-
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null)
                 }
             }
-
             Spacer(Modifier.height(8.dp))
 
             // ADDRESS
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(16.dp)
-            ) {
-
+            Column(Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Text("Delivery details", fontWeight = FontWeight.Bold)
-
                 Spacer(Modifier.height(8.dp))
-
                 Text(order.delivery_name ?: "")
                 Text(order.delivery_address ?: "")
                 Text(order.delivery_phone ?: "")
             }
-
             Spacer(Modifier.height(8.dp))
 
             // PRICE
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(16.dp)
-            ) {
-
+            Column(Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Text("Price details", fontWeight = FontWeight.Bold)
-
                 Spacer(Modifier.height(10.dp))
-
                 InvoicePriceRow("Listing price", "₹${listingPrice.toInt()}")
                 InvoicePriceRow("Special price", "-₹${discount.toInt()}", true)
                 InvoicePriceRow("Delivery fee", "₹${fees.toInt()}")
-
                 HorizontalDivider(Modifier.padding(vertical = 10.dp))
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Total amount", fontWeight = FontWeight.Bold)
                     Text("₹${price.toInt()}", fontWeight = FontWeight.Bold)
                 }
             }
-
             Spacer(Modifier.height(30.dp))
         }
     }
@@ -213,55 +179,25 @@ fun OrderInvoiceScreen(onBack: () -> Unit) {
 
 @Composable
 fun HorizontalOrderTracker(activeStep: Int) {
-
-    val labels = listOf(
-        "Confirmed",
-        "Shipped",
-        "Out for\nDelivery",
-        "Delivered"
-    )
-
+    val labels = listOf("Confirmed", "Shipped", "Out for\nDelivery", "Delivered")
     val progress = remember { Animatable(-0.5f) }
 
     LaunchedEffect(activeStep) {
-
         progress.snapTo(-0.5f)
-
         delay(300)
-
-        progress.animateTo(
-            activeStep.toFloat(),
-            animationSpec = tween(1500, easing = FastOutSlowInEasing)
-        )
+        progress.animateTo(activeStep.toFloat(), animationSpec = tween(1500, easing = FastOutSlowInEasing))
     }
 
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
+    Column(Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             repeat(4) { i ->
-
                 TrackerNode(i, progress.value)
-
-                if (i != 3)
-                    TrackerLine(i, progress.value, Modifier.weight(1f))
+                if (i != 3) TrackerLine(i, progress.value, Modifier.weight(1f))
             }
         }
-
         Spacer(Modifier.height(8.dp))
-
         Row(Modifier.fillMaxWidth()) {
-
             labels.forEachIndexed { i, label ->
-
                 Text(
                     label,
                     fontSize = 10.sp,
@@ -276,67 +212,29 @@ fun HorizontalOrderTracker(activeStep: Int) {
 
 @Composable
 fun TrackerNode(index: Int, progress: Float) {
-
     val reached = progress >= index
-
-    val scale by animateFloatAsState(
-        if (reached) 1f else 0.7f,
-        animationSpec = spring(), label = ""
-    )
+    val scale by animateFloatAsState(if (reached) 1f else 0.7f, animationSpec = spring(), label = "")
 
     Box(
-        Modifier
-            .size(28.dp)
-            .scale(scale)
-            .background(
-                if (reached) AmzGreen else Color.LightGray,
-                CircleShape
-            ),
+        Modifier.size(28.dp).scale(scale).background(if (reached) AmzGreen else Color.LightGray, CircleShape),
         contentAlignment = Alignment.Center
     ) {
-
-        if (reached)
-            Icon(
-                Icons.Default.Check,
-                null,
-                tint = Color.White,
-                modifier = Modifier.size(14.dp)
-            )
+        if (reached) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
     }
 }
 
 @Composable
 fun TrackerLine(index: Int, progress: Float, modifier: Modifier) {
-
     val fill = (progress - index).coerceIn(0f, 1f)
-
-    Box(
-        modifier
-            .height(3.dp)
-            .background(Color.LightGray)
-    ) {
-
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fill)
-                .background(AmzGreen)
-        )
+    Box(modifier.height(3.dp).background(Color.LightGray)) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fill).background(AmzGreen))
     }
 }
 
 @Composable
 private fun InvoicePriceRow(label: String, value: String, isDiscount: Boolean = false) {
-
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, fontSize = 14.sp, color = AmzGray)
-
         Text(
             value,
             fontSize = 14.sp,

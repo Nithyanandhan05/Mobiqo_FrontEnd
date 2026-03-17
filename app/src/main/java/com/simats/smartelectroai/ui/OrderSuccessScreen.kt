@@ -2,7 +2,6 @@ package com.simats.smartelectroai.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -40,7 +39,10 @@ private val AiGradient = Brush.linearGradient(listOf(AiBlue, AiLightBlue))
 private val GlassBg = Color.White.copy(alpha = 0.7f)
 
 @Composable
-fun OrderSuccessScreen(onContinueShopping: () -> Unit = {}) {
+fun OrderSuccessScreen(
+    onContinueShopping: () -> Unit = {},
+    onTrackDelivery: () -> Unit = {} // Added callback for tracking navigation
+) {
     var isTopVisible by remember { mutableStateOf(false) }
     var isBottomVisible by remember { mutableStateOf(false) }
     var isContinueVisible by remember { mutableStateOf(false) }
@@ -63,12 +65,16 @@ fun OrderSuccessScreen(onContinueShopping: () -> Unit = {}) {
     }
 
     Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars),
         containerColor = Color(0xFFF4F8FF) // Very light blue AI background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .padding(bottom = 80.dp)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -110,9 +116,8 @@ fun OrderSuccessScreen(onContinueShopping: () -> Unit = {}) {
                 enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn()
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FloatingTrackButton()
-                    Spacer(modifier = Modifier.height(16.dp))
-                    GlowingDownloadButton()
+                    // Pass the callback to the button
+                    FloatingTrackButton(onClick = onTrackDelivery)
                 }
             }
 
@@ -202,7 +207,7 @@ fun BackendOrderDetailsCard() {
 fun DeliveryTimeline(visibleSteps: Int) {
     val steps = listOf(
         Pair("Payment Verified", true),
-        Pair("Order Confirmed", true), // Changed from Warranty Registered
+        Pair("Order Confirmed", true),
         Pair("Delivery Assigned", false),
         Pair("Out for Delivery", false)
     )
@@ -289,9 +294,9 @@ fun PulsingSmartGuardCard() {
 }
 
 @Composable
-fun FloatingTrackButton() {
+fun FloatingTrackButton(onClick: () -> Unit) { // Added onClick parameter
     Button(
-        onClick = { /* Navigate to tracking */ },
+        onClick = onClick, // Applied onClick trigger here
         modifier = Modifier.fillMaxWidth().height(56.dp).shadow(12.dp, RoundedCornerShape(16.dp), spotColor = AiBlue),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -304,28 +309,5 @@ fun FloatingTrackButton() {
                 Text("Track Delivery", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
             }
         }
-    }
-}
-
-@Composable
-fun GlowingDownloadButton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "glow")
-    val glowColor by infiniteTransition.animateColor(
-        initialValue = AiLightBlue.copy(alpha = 0.3f),
-        targetValue = AiBlue.copy(alpha = 0.8f),
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
-        label = "borderColor"
-    )
-
-    OutlinedButton(
-        onClick = { /* Download PDF */ },
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(2.dp, glowColor),
-        colors = ButtonDefaults.outlinedButtonColors(containerColor = GlassBg)
-    ) {
-        Icon(Icons.Default.Download, contentDescription = "Download", tint = AiBlue)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text("Download Invoice", color = AiBlue, fontWeight = FontWeight.Bold)
     }
 }

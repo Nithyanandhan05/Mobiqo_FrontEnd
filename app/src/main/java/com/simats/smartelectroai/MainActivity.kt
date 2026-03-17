@@ -231,7 +231,6 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "AdminAiSettings" -> AiSettingsScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
                             "AdminWarranty" -> AdminWarrantyScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
 
-                            // 🚀 FIXED: ADDED THE MISSING ADMIN PAYMENT SCREEN ROUTE HERE
                             "AdminPaymentScreen" -> AdminPaymentScreen(onNavigate = { navigateTo(it) })
 
                             "Dashboard" -> DashboardScreen(
@@ -269,12 +268,21 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "Address" -> AddressScreen(onBack = { navigateBack() }, onPayment = { navigateTo("Payment") })
                             "Payment" -> PaymentScreen(onBack = { navigateBack() }, onPaymentSuccess = { navigateTo("OrderSuccess") })
 
-                            "OrderSuccess" -> OrderSuccessScreen(
-                                onContinueShopping = {
-                                    CartManager.clear()
-                                    navigateTo("Dashboard")
+                            "OrderSuccess" -> {
+                                Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                                    OrderSuccessScreen(
+                                        onContinueShopping = {
+                                            CartManager.clear()
+                                            // Reset backstack completely so "Back" doesn't return to payment!
+                                            navigateTo("Dashboard")
+                                        },
+                                        onTrackDelivery = { // Added the tracking navigation event mapped to OrderInvoice
+                                            CartManager.clear()
+                                            navigateTo("OrderInvoice")
+                                        }
+                                    )
                                 }
-                            )
+                            }
 
                             "MyWarranty" -> MyWarrantyScreen(
                                 onBack = { navigateBack() },
@@ -361,10 +369,10 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                         }
                     }
 
-                    // 🚀 FIXED: ADDED AdminPaymentScreen TO HIDE CART SCREENS
+                    // Floating Action Button Cart
                     val hideCartScreens = setOf(
                         "Splash", "Welcome", "Onboarding", "Login", "Register", "OtpVerification", "ForgotPassword",
-                        "MyCart", "Address", "Payment", "OrderSuccess",
+                        "MyCart", "Address", "Payment", "OrderSuccess", // <- Ensures it hides here
                         "AddWarranty", "WarrantyDetail", "Invoice", "WarrantyAlerts",
                         "Profile", "EditProfile", "PrivacySecurity", "Notifications",
                         "MyOrders", "SavedAddresses", "PaymentMethods", "Compare",
