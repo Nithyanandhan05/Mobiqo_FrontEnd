@@ -71,7 +71,14 @@ data class ProductResponse(val status: String, val products: List<ProductItem>)
 data class RegisterRequest(val full_name: String, val email: String, val mobile: String, val password: String)
 data class LoginRequest(val email: String, val password: String)
 data class AuthResponse(val status: String?, val message: String?, val token: String?, val user_name: String?, val is_admin: Boolean?)
-data class AiRequest(val budget: Float, val usage: String, val brand: String, val storage: String, val battery: String, val notes: String)
+data class AiRequest(
+    val budget: Float,
+    val usage: String,
+    val brand: String,    // Send as "Samsung,Apple,OnePlus" — backend handles splitting
+    val storage: String,
+    val battery: String,
+    val notes: String
+)
 data class RecommendationData(val top_match: TopMatch?, val alternatives: List<Alternative>?, val analysis: String?)
 data class TopMatch(val id: Int?, val name: String?, val price: String?, val match_percent: String?, val battery_spec: String?, val display_spec: String?, val processor_spec: String?, val camera_spec: String?, val image_url: String?, val image_urls: List<String>?)
 data class Alternative(val name: String?, val price: String?, val match_percent: String?, val image_url: String?)
@@ -202,7 +209,11 @@ interface ApiService {
 // --- SINGLETON CLIENT ---
 object RetrofitClient {
     // USING CENTROID HERE
-    private val okHttpClient = OkHttpClient.Builder().connectTimeout(60, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
+    private val okHttpClient = OkHttpClient.Builder()
+        .connectTimeout(90, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .build()
     val instance: ApiService by lazy {
         Retrofit.Builder()
             .baseUrl(ApiConfig.BASE_URL)

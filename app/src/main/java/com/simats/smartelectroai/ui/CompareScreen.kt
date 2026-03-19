@@ -76,7 +76,8 @@ fun CompareScreen(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.searchDevice("a") // Load default trending list initially
+        // 🚀 FIXED: Pass an empty string so the backend knows to load Trending devices
+        viewModel.searchDevice("")
     }
 
     Scaffold(
@@ -181,7 +182,7 @@ fun CompareScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = if (searchQuery.isEmpty()) "Trending Devices" else "Search Results",
+                text = if (searchQuery.isEmpty()) "Recent Comparisons" else "Search Results",
                 fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = CompTextMain
             )
 

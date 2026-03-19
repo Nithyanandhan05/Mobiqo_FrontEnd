@@ -1,6 +1,7 @@
 package com.simats.smartelectroai.ui
 
 import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -44,16 +45,39 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
     val visibleState = remember { MutableTransitionState(false) }
     var isLoading by remember { mutableStateOf(true) }
     var dashboardData by remember { mutableStateOf<AdminDashboardResponse?>(null) }
-    val token = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE).getString("jwt_token", "") ?: "" }
+
+    val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val token = sharedPrefs.getString("jwt_token", "") ?: ""
+
+    // 🚀 FIXED: The exact route to match your MainActivity.kt
+    val handleLogout = {
+        sharedPrefs.edit().remove("jwt_token").apply()
+        Toast.makeText(context, "Logged out successfully", Toast.LENGTH_SHORT).show()
+        onNavigate("Login") // Matches "Login" in MainActivity.kt perfectly!
+    }
 
     LaunchedEffect(Unit) {
+        // 🚀 FIXED: Stop the 422 Error before it happens
+        if (token.isBlank()) {
+            onNavigate("Login")
+            return@LaunchedEffect
+        }
+
         RetrofitClient.instance.getAdminDashboard("Bearer $token").enqueue(object : Callback<AdminDashboardResponse> {
             override fun onResponse(call: Call<AdminDashboardResponse>, response: Response<AdminDashboardResponse>) {
-                if (response.isSuccessful) dashboardData = response.body()
+                if (response.isSuccessful && response.body()?.status == "success") {
+                    dashboardData = response.body()
+                } else if (response.code() == 422 || response.code() == 401) {
+                    // Token is expired or invalid. Force logout gracefully.
+                    handleLogout()
+                } else {
+                    Toast.makeText(context, "Server Error: ${response.code()}", Toast.LENGTH_SHORT).show()
+                }
                 isLoading = false
                 visibleState.targetState = true
             }
             override fun onFailure(call: Call<AdminDashboardResponse>, t: Throwable) {
+                Toast.makeText(context, "Network Error: ${t.message}", Toast.LENGTH_LONG).show()
                 isLoading = false
                 visibleState.targetState = true
             }
@@ -61,12 +85,14 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
     }
 
     Scaffold(
-        topBar = { EnterpriseTopBar(visibleState) },
+        topBar = { EnterpriseTopBar(visibleState, onLogout = handleLogout) },
         bottomBar = { AdminBottomNavBar("AdminDashboard", onNavigate) },
         containerColor = Color.White
     ) { padding ->
         if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = BlueMain) }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = BlueMain)
+            }
         } else {
             AnimatedVisibility(
                 visibleState = visibleState,
@@ -81,13 +107,13 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
                                 StatCard("Total Orders", stats?.total_orders ?: "0", "Live", Icons.Default.ShoppingBag, visibleState, onClick = { onNavigate("AdminOrderManagement") })
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                StatCard("Active Warranty", stats?.active_warranties ?: "0", "Secure", Icons.Default.Verified, visibleState)
+                                StatCard("Active Warranty", stats?.active_warranties ?: "0", "Secure", Icons.Default.Verified, visibleState, onClick = { onNavigate("AdminWarranty") })
                                 StatCard("AI Recommend", stats?.ai_searches ?: "0", "+12%", Icons.Default.AutoAwesome, visibleState)
                             }
                         }
                     }
                     item { AiRecommendationCard(visibleState) }
-                    item { AdminSectionHeader("Recent Orders") }
+                    item { AdminSectionHeader("Recent Orders", onNavigate) }
                     val recentOrders = dashboardData?.recent_orders ?: emptyList()
                     if (recentOrders.isEmpty()) {
                         item { Text("No orders found.", color = Color.Gray) }
@@ -107,9 +133,39 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EnterpriseTopBar(state: MutableTransitionState<Boolean>) {
+fun EnterpriseTopBar(state: MutableTransitionState<Boolean>, onLogout: () -> Unit) {
+    var showMenu by remember { mutableStateOf(false) }
+
     AnimatedVisibility(visibleState = state, enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { -it }) {
-        TopAppBar(title = { Text("EnterpriseAI", fontWeight = FontWeight.Bold) }, actions = { Icon(Icons.Default.Search, "Search"); Spacer(Modifier.width(12.dp)); Icon(Icons.Default.Notifications, "Notifications"); Spacer(Modifier.width(12.dp)); Icon(Icons.Default.AccountCircle, "Profile") }, colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White))
+        TopAppBar(
+            title = { Text("EnterpriseAI", fontWeight = FontWeight.Bold) },
+            actions = {
+                // Profile Icon with Dropdown Menu
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.AccountCircle, "Profile")
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(Color.White)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Logout", color = Color.Red, fontWeight = FontWeight.Bold) },
+                            onClick = {
+                                showMenu = false
+                                onLogout()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.Red)
+                            }
+                        )
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+        )
     }
 }
 
@@ -159,8 +215,13 @@ fun ExpiringWarrantyCard(state: MutableTransitionState<Boolean>) {
 }
 
 @Composable
-private fun AdminSectionHeader(text: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("View All", color = BlueMain, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+private fun AdminSectionHeader(text: String, onNavigate: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        TextButton(onClick = { onNavigate("AdminOrderManagement") }) {
+            Text("View All", color = BlueMain, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+    }
 }
 
 @Composable
@@ -169,7 +230,7 @@ fun AdminBottomNavBar(currentScreen: String, onNavigate: (String) -> Unit) {
         val items = listOf(
             Triple("AdminDashboard", Icons.Default.GridView, "Dashboard"),
             Triple("AdminOrderManagement", Icons.Default.ShoppingBag, "Orders"),
-            Triple("AdminPaymentScreen", Icons.Default.AttachMoney, "Payments"), // NEW!
+            Triple("AdminPaymentScreen", Icons.Default.AttachMoney, "Payments"),
             Triple("AdminWarranty", Icons.Default.VerifiedUser, "Warranty"),
             Triple("AdminUsers", Icons.Default.Group, "Users")
         )

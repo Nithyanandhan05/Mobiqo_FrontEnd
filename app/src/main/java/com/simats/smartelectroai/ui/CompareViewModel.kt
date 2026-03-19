@@ -22,20 +22,20 @@ class CompareViewModel : ViewModel() {
     private val _searchResults = MutableStateFlow<List<SearchDeviceResult>>(emptyList())
     val searchResults = _searchResults.asStateFlow()
 
-    // NEW: Track the loading state of the search operation
     private val _isSearching = MutableStateFlow(false)
     val isSearching = _isSearching.asStateFlow()
 
     private var lastComparedDevices: List<String> = emptyList()
 
     fun searchDevice(query: String) {
-        val finalQuery = if (query.isBlank()) "a" else query
+        // 🚀 FIXED: Do not send "a" anymore. Send the actual query, or an empty string.
+        val finalQuery = query.trim()
 
-        _isSearching.value = true // Trigger loading animation
+        _isSearching.value = true
 
         RetrofitClient.instance.searchDevices(finalQuery).enqueue(object : Callback<SearchDeviceResponse> {
             override fun onResponse(call: Call<SearchDeviceResponse>, response: Response<SearchDeviceResponse>) {
-                _isSearching.value = false // Stop loading animation
+                _isSearching.value = false
                 if (response.isSuccessful && response.body()?.status == "success") {
                     _searchResults.value = response.body()?.results ?: emptyList()
                 } else {
@@ -43,7 +43,7 @@ class CompareViewModel : ViewModel() {
                 }
             }
             override fun onFailure(call: Call<SearchDeviceResponse>, t: Throwable) {
-                _isSearching.value = false // Stop loading animation
+                _isSearching.value = false
                 _searchResults.value = emptyList()
             }
         })

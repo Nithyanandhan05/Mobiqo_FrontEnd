@@ -483,10 +483,14 @@ fun fetchAddresses(context: Context, onResult: (List<AddressModel>) -> Unit) {
             if (response.isSuccessful && response.body()?.status == "success") {
                 onResult(response.body()?.addresses ?: emptyList())
             } else {
+                // If it fails, show a toast with the error code so we aren't guessing!
+                Toast.makeText(context, "Server Error: ${response.code()}", Toast.LENGTH_SHORT).show()
                 onResult(emptyList())
             }
         }
         override fun onFailure(call: Call<AddressListResponse>, t: Throwable) {
+            // If Android crashes trying to read the JSON, show the actual crash error
+            Toast.makeText(context, "Network/Parsing Error: ${t.message}", Toast.LENGTH_LONG).show()
             onResult(emptyList())
         }
     })

@@ -34,6 +34,14 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.simats.smartelectroai.api.RecommendationManager
 
+// Simple UI Model to handle swapping smoothly
+data class PhoneUiModel(
+    val name: String,
+    val price: String,
+    val imageUrl: String,
+    val matchPercent: String
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiRecommendationScreen(
@@ -58,9 +66,48 @@ fun AiRecommendationScreen(
                 Text("No recommendation data found.\nPlease try again.")
             }
         } else {
-            val topMatch = aiData.top_match
-            val matchString = topMatch.match_percent ?: "90%"
-            val matchFloat = matchString.filter { it.isDigit() }.toFloatOrNull()?.div(100f) ?: 0.9f
+            // 1. Gather ALL phones (Top + Alts) into one unified, clean list
+            val allUniquePhones = remember(aiData) {
+                val list = mutableListOf<PhoneUiModel>()
+
+                // Add Top Match safely
+                aiData.top_match.let { top ->
+                    list.add(
+                        PhoneUiModel(
+                            name = top.name ?: "Unknown Phone",
+                            price = top.price ?: "₹--",
+                            imageUrl = top.image_url ?: "",
+                            matchPercent = top.match_percent ?: "90%"
+                        )
+                    )
+                }
+
+                // Add Alternatives safely
+                aiData.alternatives?.forEach { alt ->
+                    list.add(
+                        PhoneUiModel(
+                            name = alt.name ?: "Unknown Phone",
+                            price = alt.price ?: "₹--",
+                            imageUrl = alt.image_url ?: "",
+                            matchPercent = alt.match_percent ?: "85%"
+                        )
+                    )
+                }
+
+                // ULTIMATE FILTER: Remove duplicates by checking the base name (ignores storage variants)
+                // Example: "OnePlus 12 (8GB)" and "OnePlus 12 (12GB)" become just "OnePlus 12", blocking the duplicate!
+                list.distinctBy { it.name.substringBefore("(").trim() }
+            }
+
+            // 2. Track which phone is currently featured as the "Hero"
+            var selectedPhone by remember(allUniquePhones) {
+                mutableStateOf(allUniquePhones.first())
+            }
+
+            // 3. The alternatives list is just ALL phones minus the one currently selected
+            val displayAlts = allUniquePhones.filter { it.name != selectedPhone.name }
+
+            val matchFloat = selectedPhone.matchPercent.filter { it.isDigit() }.toFloatOrNull()?.div(100f) ?: 0.9f
 
             Column(
                 modifier = Modifier
@@ -70,24 +117,28 @@ fun AiRecommendationScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // HERO CARD
                 HeroRecommendationCard(
-                    name = topMatch.name ?: "Unknown Phone",
-                    price = topMatch.price ?: "₹--",
-                    imageUrl = topMatch.image_url ?: "",
+                    name = selectedPhone.name,
+                    price = selectedPhone.price,
+                    imageUrl = selectedPhone.imageUrl,
                     matchFloat = matchFloat,
                     onClick = onProductClick
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // ANALYSIS SECTION
                 AiAnalysisSection(
                     analysisText = aiData.analysis ?: "No detailed analysis provided.",
-                    baseMatchFloat = matchFloat
+                    baseMatchFloat = matchFloat,
+                    animationKey = selectedPhone.name // Pass name to restart animations on swap
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                if (!aiData.alternatives.isNullOrEmpty()) {
+                // ALTERNATIVES ROW
+                if (displayAlts.isNotEmpty()) {
                     Text(
                         text = "Strong Alternatives",
                         fontSize = 18.sp,
@@ -101,8 +152,14 @@ fun AiRecommendationScreen(
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(aiData.alternatives) { alt ->
-                            AlternativeCard(alt)
+                        items(displayAlts) { altPhone ->
+                            AlternativeCard(
+                                phone = altPhone,
+                                onClick = {
+                                    // SWAP LOGIC: When clicked, update the top selected phone!
+                                    selectedPhone = altPhone
+                                }
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(32.dp))
@@ -116,8 +173,8 @@ fun AiRecommendationScreen(
 fun HeroRecommendationCard(
     name: String, price: String, imageUrl: String, matchFloat: Float, onClick: () -> Unit
 ) {
-    var played by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { played = true }
+    var played by remember(name) { mutableStateOf(false) } // Keyed by name so progress restarts on swap
+    LaunchedEffect(name) { played = true }
 
     val animatedMatch by animateFloatAsState(
         targetValue = if (played) matchFloat else 0f,
@@ -129,7 +186,6 @@ fun HeroRecommendationCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            // Replaced Purple with Light Blue (0xFF03A9F4)
             .border(2.dp, Brush.linearGradient(listOf(Color(0xFF2962FF), Color(0xFF03A9F4))), RoundedCornerShape(24.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(24.dp),
@@ -159,7 +215,7 @@ fun HeroRecommendationCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Top Match",
-                        color = Color(0xFF03A9F4), // Light Blue
+                        color = Color(0xFF03A9F4),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
@@ -167,7 +223,7 @@ fun HeroRecommendationCard(
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(name, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1E1E2C))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(price, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2962FF)) // Deep Blue
+                    Text(price, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2962FF))
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -180,7 +236,7 @@ fun HeroRecommendationCard(
                             )
                             CircularProgressIndicator(
                                 progress = { animatedMatch },
-                                color = Color(0xFF03A9F4), // Light Blue
+                                color = Color(0xFF03A9F4),
                                 strokeWidth = 5.dp
                             )
                             Text(
@@ -206,7 +262,6 @@ fun HeroRecommendationCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        // Replaced Purple with Light Blue (0xFF03A9F4)
                         .background(Brush.linearGradient(listOf(Color(0xFF2962FF), Color(0xFF03A9F4))), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -218,10 +273,10 @@ fun HeroRecommendationCard(
 }
 
 @Composable
-fun AiAnalysisSection(analysisText: String, baseMatchFloat: Float) {
+fun AiAnalysisSection(analysisText: String, baseMatchFloat: Float, animationKey: String) {
     Column(modifier = Modifier.padding(horizontal = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF03A9F4), modifier = Modifier.size(24.dp)) // Light Blue
+            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF03A9F4), modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Why AI Recommended This", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E1E2C))
         }
@@ -231,17 +286,17 @@ fun AiAnalysisSection(analysisText: String, baseMatchFloat: Float) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        AnimatedFeatureBar("Performance", (baseMatchFloat * 1.02f).coerceAtMost(0.99f))
-        AnimatedFeatureBar("Camera", (baseMatchFloat * 0.95f).coerceAtMost(0.98f))
-        AnimatedFeatureBar("Battery", (baseMatchFloat * 0.98f).coerceAtMost(0.99f))
-        AnimatedFeatureBar("Display", (baseMatchFloat * 1.0f).coerceAtMost(0.97f))
+        AnimatedFeatureBar("Performance", (baseMatchFloat * 1.02f).coerceAtMost(0.99f), animationKey)
+        AnimatedFeatureBar("Camera", (baseMatchFloat * 0.95f).coerceAtMost(0.98f), animationKey)
+        AnimatedFeatureBar("Battery", (baseMatchFloat * 0.98f).coerceAtMost(0.99f), animationKey)
+        AnimatedFeatureBar("Display", (baseMatchFloat * 1.0f).coerceAtMost(0.97f), animationKey)
     }
 }
 
 @Composable
-fun AnimatedFeatureBar(label: String, targetProgress: Float) {
-    var played by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { played = true }
+fun AnimatedFeatureBar(label: String, targetProgress: Float, animationKey: String) {
+    var played by remember(animationKey) { mutableStateOf(false) }
+    LaunchedEffect(animationKey) { played = true }
 
     val progress by animateFloatAsState(
         targetValue = if (played) targetProgress else 0f,
@@ -260,7 +315,6 @@ fun AnimatedFeatureBar(label: String, targetProgress: Float) {
                 modifier = Modifier
                     .fillMaxWidth(fraction = progress)
                     .height(8.dp)
-                    // Replaced Purple with Light Blue (0xFF03A9F4)
                     .background(Brush.linearGradient(listOf(Color(0xFF2962FF), Color(0xFF03A9F4))), CircleShape)
             )
         }
@@ -268,9 +322,11 @@ fun AnimatedFeatureBar(label: String, targetProgress: Float) {
 }
 
 @Composable
-fun AlternativeCard(alt: com.simats.smartelectroai.api.Alternative) {
+fun AlternativeCard(phone: PhoneUiModel, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.width(160.dp),
+        modifier = Modifier
+            .width(160.dp)
+            .clickable { onClick() }, // Triggers the swap when clicked!
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFEEEEEE)),
@@ -287,7 +343,7 @@ fun AlternativeCard(alt: com.simats.smartelectroai.api.Alternative) {
                     .align(Alignment.End)
             ) {
                 Text(
-                    text = alt.match_percent ?: "N/A",
+                    text = phone.matchPercent,
                     color = Color(0xFF2E7D32),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
@@ -295,7 +351,7 @@ fun AlternativeCard(alt: com.simats.smartelectroai.api.Alternative) {
             }
 
             AsyncImage(
-                model = alt.image_url ?: "",
+                model = phone.imageUrl,
                 contentDescription = null,
                 modifier = Modifier.size(80.dp).padding(8.dp),
                 contentScale = ContentScale.Fit,
@@ -304,7 +360,7 @@ fun AlternativeCard(alt: com.simats.smartelectroai.api.Alternative) {
             )
 
             Text(
-                text = alt.name ?: "Unknown",
+                text = phone.name,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
                 color = Color(0xFF1E1E2C),
@@ -313,8 +369,8 @@ fun AlternativeCard(alt: com.simats.smartelectroai.api.Alternative) {
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = alt.price ?: "-",
-                color = Color(0xFF2962FF), // Deep Blue
+                text = phone.price,
+                color = Color(0xFF2962FF),
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 14.sp
             )

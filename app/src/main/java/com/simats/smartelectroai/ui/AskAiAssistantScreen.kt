@@ -52,10 +52,9 @@ fun AskAiAssistantScreen(
 
     var budget by remember { mutableFloatStateOf(30000f) }
     var selectedUsage by remember { mutableStateOf("Gaming") }
-    // 🚀 MODIFIED: Brand is now a Set to allow multiple selections
     var selectedBrands by remember { mutableStateOf(setOf<String>()) }
     var selectedStorage by remember { mutableStateOf("128GB") }
-    var batteryPreference by remember { mutableStateOf("Standard") }
+    var batteryPreference by remember { mutableStateOf("Standard") }  // ✅ FIX 2: correct variable name
     var notes by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -79,7 +78,9 @@ fun AskAiAssistantScreen(
                 color = Color.White
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -103,10 +104,22 @@ fun AskAiAssistantScreen(
                         Button(
                             onClick = {
                                 isLoading = true
-                                // 🚀 Format the brands into a comma-separated string for the API
-                                val brandString = if (selectedBrands.isEmpty()) "Any" else selectedBrands.joinToString(", ")
 
-                                val request = AiRequest(budget, selectedUsage, brandString, selectedStorage, batteryPreference, notes)
+                                // ✅ FIX 1 & 3: Single brandString declaration, no space after comma
+                                val brandString = if (selectedBrands.isEmpty() || selectedBrands.contains("Any")) {
+                                    "Any"
+                                } else {
+                                    selectedBrands.joinToString(",") // ✅ "Samsung,Apple,OnePlus" — no space
+                                }
+
+                                val request = AiRequest(
+                                    budget  = budget,
+                                    usage   = selectedUsage,
+                                    brand   = brandString,
+                                    storage = selectedStorage,
+                                    battery = batteryPreference, // ✅ FIX 2: was "selectedBattery" — now correct
+                                    notes   = notes
+                                )
 
                                 RetrofitClient.instance.getRecommendations(request).enqueue(object : Callback<AiResponse> {
                                     override fun onResponse(call: Call<AiResponse>, response: Response<AiResponse>) {
@@ -128,6 +141,7 @@ fun AskAiAssistantScreen(
                                             Toast.makeText(context, "App Logic Error: ${e.message}", Toast.LENGTH_SHORT).show()
                                         }
                                     }
+
                                     override fun onFailure(call: Call<AiResponse>, t: Throwable) {
                                         isLoading = false
                                         Toast.makeText(context, "Network Error: ${t.message}", Toast.LENGTH_LONG).show()
@@ -139,7 +153,10 @@ fun AskAiAssistantScreen(
                             enabled = !isLoading
                         ) {
                             if (isLoading) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
                             } else {
                                 Text("Generate", modifier = Modifier.padding(horizontal = 8.dp))
                             }
@@ -157,7 +174,9 @@ fun AskAiAssistantScreen(
         ) {
             LinearProgressIndicator(
                 progress = { (currentStep + 1) / totalSteps.toFloat() },
-                modifier = Modifier.fillMaxWidth().height(4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
                 color = Color(0xFF1A73E8),
                 trackColor = Color(0xFFE3F2FD),
             )
@@ -166,11 +185,14 @@ fun AskAiAssistantScreen(
                 targetState = currentStep,
                 transitionSpec = {
                     if (targetState > initialState) {
-                        (slideInHorizontally(animationSpec = tween(300)) { width -> width } + fadeIn()).togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> -width } + fadeOut())
+                        (slideInHorizontally(animationSpec = tween(300)) { width -> width } + fadeIn())
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> -width } + fadeOut())
                     } else {
-                        (slideInHorizontally(animationSpec = tween(300)) { width -> -width } + fadeIn()).togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> width } + fadeOut())
+                        (slideInHorizontally(animationSpec = tween(300)) { width -> -width } + fadeIn())
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(300)) { width -> width } + fadeOut())
                     }
-                }, label = "wizard_animation"
+                },
+                label = "wizard_animation"
             ) { step ->
                 Column(
                     modifier = Modifier
@@ -195,12 +217,12 @@ fun AskAiAssistantScreen(
                             }
                         )
                         3 -> StepFourDetails(
-                            selectedStorage = selectedStorage,
-                            batteryPreference = batteryPreference,
-                            notes = notes,
-                            onStorageChange = { selectedStorage = it },
-                            onBatteryChange = { batteryPreference = it },
-                            onNotesChange = { notes = it }
+                            selectedStorage    = selectedStorage,
+                            batteryPreference  = batteryPreference,
+                            notes              = notes,
+                            onStorageChange    = { selectedStorage = it },
+                            onBatteryChange    = { batteryPreference = it },
+                            onNotesChange      = { notes = it }
                         )
                     }
                 }
@@ -210,23 +232,33 @@ fun AskAiAssistantScreen(
 }
 
 // ==========================================
-// STEP 1: CUSTOM BUDGET SUPPORT
+// STEP 1: BUDGET
 // ==========================================
 @Composable
 fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
-    var customBudgetInput by remember { mutableStateOf(if (currentBudget > 0 && currentBudget !in listOf(15000f, 30000f, 60000f, 100000f)) currentBudget.toInt().toString() else "") }
+    var customBudgetInput by remember {
+        mutableStateOf(
+            if (currentBudget > 0 && currentBudget !in listOf(15000f, 30000f, 60000f, 100000f))
+                currentBudget.toInt().toString()
+            else ""
+        )
+    }
 
-    Text("What is your budget range?", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Text(
+        "What is your budget range?",
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
     Spacer(modifier = Modifier.height(8.dp))
     Text("Choose a category or enter a custom amount", color = Color.Gray, fontSize = 14.sp)
-
     Spacer(modifier = Modifier.height(24.dp))
 
     val budgetOptions = listOf(
-        BudgetOption("Budget Phone", "Under ₹15,000", Icons.Outlined.AccountBalanceWallet, 15000f),
-        BudgetOption("Mid-Range", "₹15,000 – ₹30,000", Icons.Outlined.Speed, 30000f),
-        BudgetOption("Premium", "₹30,000 – ₹60,000", Icons.Outlined.StarBorder, 60000f),
-        BudgetOption("Flagship", "Above ₹60,000", Icons.Outlined.WorkspacePremium, 100000f)
+        BudgetOption("Budget Phone", "Under ₹15,000",         Icons.Outlined.AccountBalanceWallet, 15000f),
+        BudgetOption("Mid-Range",    "₹15,000 – ₹30,000",    Icons.Outlined.Speed,                30000f),
+        BudgetOption("Premium",      "₹30,000 – ₹60,000",    Icons.Outlined.StarBorder,           60000f),
+        BudgetOption("Flagship",     "Above ₹60,000",         Icons.Outlined.WorkspacePremium,     100000f)
     )
 
     LazyVerticalGrid(
@@ -239,19 +271,23 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
             val isSelected = currentBudget == option.apiValue
             Card(
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF8F9FA)),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF8F9FA)
+                ),
                 border = BorderStroke(1.dp, if (isSelected) Color(0xFF1A73E8) else Color(0xFFEEEEEE)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1.2f)
                     .clickable {
-                        customBudgetInput = "" // Clear custom input if predefined is selected
+                        customBudgetInput = ""
                         onBudgetSelect(option.apiValue)
                     },
                 elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 0.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp).fillMaxSize(),
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
@@ -283,7 +319,6 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
 
     Spacer(modifier = Modifier.height(24.dp))
 
-    // 🚀 ADDED: Custom Budget Input
     OutlinedTextField(
         value = customBudgetInput,
         onValueChange = {
@@ -305,23 +340,33 @@ fun StepOneBudget(currentBudget: Float, onBudgetSelect: (Float) -> Unit) {
     )
 }
 
-data class BudgetOption(val title: String, val subtitle: String, val icon: ImageVector, val apiValue: Float)
+data class BudgetOption(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val apiValue: Float
+)
 
 // ==========================================
-// STEP 2 & 3: USAGE & BRAND
+// STEP 2: USAGE
 // ==========================================
 @Composable
 fun StepTwoUsage(selectedUsage: String, onUsageSelect: (String) -> Unit) {
     val usages = listOf(
-        Pair("Gaming", Icons.Outlined.VideogameAsset),
-        Pair("Camera", Icons.Outlined.CameraAlt),
+        Pair("Gaming",   Icons.Outlined.VideogameAsset),
+        Pair("Camera",   Icons.Outlined.CameraAlt),
         Pair("Business", Icons.Outlined.WorkOutline),
-        Pair("Media", Icons.Outlined.Movie),
-        Pair("Student", Icons.Outlined.School),
-        Pair("General", Icons.Outlined.Smartphone)
+        Pair("Media",    Icons.Outlined.Movie),
+        Pair("Student",  Icons.Outlined.School),
+        Pair("General",  Icons.Outlined.Smartphone)
     )
 
-    Text("How will you use this phone?", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Text(
+        "How will you use this phone?",
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
     Spacer(modifier = Modifier.height(8.dp))
     Text("Select your primary use case", color = Color.Gray, fontSize = 14.sp)
     Spacer(modifier = Modifier.height(24.dp))
@@ -333,12 +378,18 @@ fun StepTwoUsage(selectedUsage: String, onUsageSelect: (String) -> Unit) {
         modifier = Modifier.height(400.dp)
     ) {
         items(usages) { (name, icon) ->
-            SelectionCard(title = name, icon = icon, isSelected = selectedUsage == name) { onUsageSelect(name) }
+            SelectionCard(
+                title = name,
+                icon = icon,
+                isSelected = selectedUsage == name
+            ) { onUsageSelect(name) }
         }
     }
 }
 
-// 🚀 MODIFIED: Accepts a Set of selected brands and toggles them
+// ==========================================
+// STEP 3: BRAND (multi-select)
+// ==========================================
 @Composable
 fun StepThreeBrand(selectedBrands: Set<String>, onBrandToggle: (String) -> Unit) {
     val brands = listOf(
@@ -347,7 +398,12 @@ fun StepThreeBrand(selectedBrands: Set<String>, onBrandToggle: (String) -> Unit)
         "Motorola", "Realme", "Poco", "iQOO"
     )
 
-    Text("Preferred Brands", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Text(
+        "Preferred Brands",
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
     Spacer(modifier = Modifier.height(8.dp))
     Text("Select multiple brands, or choose 'Any'", color = Color.Gray, fontSize = 14.sp)
     Spacer(modifier = Modifier.height(24.dp))
@@ -359,19 +415,29 @@ fun StepThreeBrand(selectedBrands: Set<String>, onBrandToggle: (String) -> Unit)
         modifier = Modifier.height(400.dp)
     ) {
         items(brands) { brand ->
-            val isSelected = selectedBrands.contains(brand) || (brand == "Any" && selectedBrands.isEmpty())
+            val isSelected = selectedBrands.contains(brand) ||
+                    (brand == "Any" && selectedBrands.isEmpty())
             Card(
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF5F5F5)),
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).clickable { onBrandToggle(brand) },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF5F5F5)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clickable { onBrandToggle(brand) },
                 elevation = CardDefaults.cardElevation(if (isSelected) 4.dp else 0.dp)
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
                         text = brand,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) Color.White else Color.DarkGray,
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -380,22 +446,39 @@ fun StepThreeBrand(selectedBrands: Set<String>, onBrandToggle: (String) -> Unit)
 }
 
 // ==========================================
-// STEP 4: REDESIGNED FINAL DETAILS
+// STEP 4: FINAL DETAILS
 // ==========================================
 @Composable
 fun StepFourDetails(
-    selectedStorage: String, batteryPreference: String, notes: String,
-    onStorageChange: (String) -> Unit, onBatteryChange: (String) -> Unit, onNotesChange: (String) -> Unit
+    selectedStorage: String,
+    batteryPreference: String,
+    notes: String,
+    onStorageChange: (String) -> Unit,
+    onBatteryChange: (String) -> Unit,
+    onNotesChange: (String) -> Unit
 ) {
-    Text("Final Details", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    Text(
+        "Final Details",
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center
+    )
     Spacer(modifier = Modifier.height(8.dp))
     Text("Fine-tune your requirements", color = Color.Gray, fontSize = 14.sp)
-
     Spacer(modifier = Modifier.height(32.dp))
 
-    Text("Minimum Storage", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth())
+    // --- Storage ---
+    Text(
+        "Minimum Storage",
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth()
+    )
     Spacer(modifier = Modifier.height(12.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         listOf("128GB", "256GB", "512GB+").forEach { storage ->
             val isSelected = selectedStorage == storage
             Box(
@@ -407,36 +490,65 @@ fun StepFourDetails(
                     .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(storage, color = if (isSelected) Color.White else Color.DarkGray, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(
+                    text = storage,
+                    color = if (isSelected) Color.White else Color.DarkGray,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.sp
+                )
             }
         }
     }
 
     Spacer(modifier = Modifier.height(32.dp))
 
-    Text("Battery Life", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth())
+    // --- Battery ---
+    Text(
+        "Battery Life",
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth()
+    )
     Spacer(modifier = Modifier.height(12.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         val batteryOptions = listOf(
             Pair("Standard", Icons.Outlined.BatteryStd),
-            Pair("Massive", Icons.Outlined.BatteryChargingFull)
+            Pair("Massive",  Icons.Outlined.BatteryChargingFull)
         )
         batteryOptions.forEach { (type, icon) ->
             val isSelected = batteryPreference == type
             Card(
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFFE3F2FD) else Color.White),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isSelected) Color(0xFFE3F2FD) else Color.White
+                ),
                 border = BorderStroke(1.dp, if (isSelected) Color(0xFF1A73E8) else Color.LightGray),
-                modifier = Modifier.weight(1f).clickable { onBatteryChange(type) }
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onBatteryChange(type) }
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Icon(icon, contentDescription = type, tint = if (isSelected) Color(0xFF1A73E8) else Color.Gray, modifier = Modifier.size(20.dp))
+                    Icon(
+                        icon,
+                        contentDescription = type,
+                        tint = if (isSelected) Color(0xFF1A73E8) else Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(type, color = if (isSelected) Color(0xFF1A73E8) else Color.DarkGray, fontWeight = FontWeight.Medium)
+                    Text(
+                        text = type,
+                        color = if (isSelected) Color(0xFF1A73E8) else Color.DarkGray,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
@@ -444,39 +556,75 @@ fun StepFourDetails(
 
     Spacer(modifier = Modifier.height(32.dp))
 
-    Text("Specific Features (Optional)", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.fillMaxWidth())
+    // --- Notes ---
+    Text(
+        "Specific Features (Optional)",
+        fontWeight = FontWeight.Bold,
+        fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth()
+    )
     Spacer(modifier = Modifier.height(12.dp))
     OutlinedTextField(
         value = notes,
         onValueChange = onNotesChange,
-        placeholder = { Text("E.g. Headphone jack, flat display, good for selfies...", color = Color.Gray) },
-        leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = Color.Gray) },
-        modifier = Modifier.fillMaxWidth().height(120.dp),
+        placeholder = {
+            Text(
+                "E.g. Headphone jack, flat display, good for selfies...",
+                color = Color.Gray
+            )
+        },
+        leadingIcon = {
+            Icon(Icons.Outlined.Edit, contentDescription = null, tint = Color.Gray)
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp),
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Color(0xFF1A73E8),
+            focusedBorderColor   = Color(0xFF1A73E8),
             unfocusedBorderColor = Color(0xFFE0E0E0),
-            focusedContainerColor = Color(0xFFFAFAFA),
+            focusedContainerColor   = Color(0xFFFAFAFA),
             unfocusedContainerColor = Color(0xFFFAFAFA)
         )
     )
 }
 
+// ==========================================
+// SHARED CARD COMPONENT
+// ==========================================
 @Composable
-fun SelectionCard(title: String, icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
+fun SelectionCard(
+    title: String,
+    icon: ImageVector,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF5F5F5)),
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) Color(0xFF1A73E8) else Color(0xFFF5F5F5)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
         elevation = CardDefaults.cardElevation(if (isSelected) 6.dp else 0.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(24.dp)
         ) {
-            Icon(icon, contentDescription = title, tint = if (isSelected) Color.White else Color.Gray, modifier = Modifier.size(32.dp))
+            Icon(
+                icon,
+                contentDescription = title,
+                tint = if (isSelected) Color.White else Color.Gray,
+                modifier = Modifier.size(32.dp)
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(title, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else Color.DarkGray)
+            Text(
+                text = title,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) Color.White else Color.DarkGray
+            )
         }
     }
 }
