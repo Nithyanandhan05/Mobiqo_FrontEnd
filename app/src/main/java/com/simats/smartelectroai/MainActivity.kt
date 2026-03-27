@@ -161,7 +161,25 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "Splash" -> {
                                 SplashScreen(
                                     onVideoFinished = {
-                                        navigateTo("Welcome")
+                                        // 🚀 AUTO-LOGIN LOGIC HERE
+                                        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                                        val token = prefs.getString("jwt_token", "")
+                                        val isAdmin = prefs.getBoolean("is_admin", false)
+                                        val hasSeenSubscription = prefs.getBoolean("has_seen_subscription", false)
+
+                                        if (!token.isNullOrEmpty()) {
+                                            // User is already logged in
+                                            if (isAdmin) {
+                                                navigateTo("AdminDashboard")
+                                            } else {
+                                                // Check if they need to see the subscription page
+                                                if (!hasSeenSubscription) navigateTo("Subscription")
+                                                else navigateTo("Dashboard")
+                                            }
+                                        } else {
+                                            // New User
+                                            navigateTo("Welcome")
+                                        }
                                     }
                                 )
                             }
@@ -181,11 +199,37 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                     SignInScreen(
                                         onSignIn = { isAdmin ->
                                             syncFcmTokenToBackend()
-                                            if (isAdmin) navigateTo("AdminDashboard")
-                                            else navigateTo("Dashboard")
+                                            if (isAdmin) {
+                                                navigateTo("AdminDashboard")
+                                            } else {
+                                                // 🚀 ROUTE TO SUBSCRIPTION ONCE AFTER LOGIN
+                                                val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                                                val hasSeenSub = prefs.getBoolean("has_seen_subscription", false)
+                                                if (!hasSeenSub) navigateTo("Subscription")
+                                                else navigateTo("Dashboard")
+                                            }
                                         },
                                         onSignUp = { navigateTo("Register") },
                                         onForgotPassword = { navigateTo("ForgotPassword") }
+                                    )
+                                }
+                            }
+
+                            // 🚀 NEW SUBSCRIPTION SCREEN ROUTE
+                            "Subscription" -> {
+                                Box(modifier = Modifier.fillMaxSize()) { // Removes padding for immersive design
+                                    SubscriptionScreen(
+                                        onSkip = {
+                                            getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit().putBoolean("has_seen_subscription", true).apply()
+                                            navigateTo("Dashboard")
+                                        },
+                                        onSubscribeSuccess = {
+                                            getSharedPreferences("app_prefs", Context.MODE_PRIVATE).edit()
+                                                .putBoolean("has_seen_subscription", true)
+                                                .putBoolean("is_premium_user", true)
+                                                .apply()
+                                            navigateTo("Dashboard")
+                                        }
                                     )
                                 }
                             }
@@ -362,7 +406,6 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "EditProfile" -> EditProfileScreen(onBack = { navigateBack() })
                             "PrivacySecurity" -> PrivacySecurityScreen(onBack = { navigateBack() }, onNavigate = { screen -> navigateTo(screen) })
                             "ChangePassword" -> ChangePasswordScreen(onBack = { navigateBack() })
-                            // 🚀 NEW: Added Legal Screens Routing
                             "PrivacyPolicy" -> PrivacyPolicyScreen(onBack = { navigateBack() })
                             "TermsConditions" -> TermsConditionsScreen(onBack = { navigateBack() })
 
@@ -400,14 +443,13 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                     // Floating Action Button Cart
                     val hideCartScreens = setOf(
                         "Splash", "Welcome", "Onboarding", "Login", "Register", "OtpVerification", "ForgotPassword",
-                        "MyCart", "Address", "Payment", "OrderSuccess",
+                        "MyCart", "Address", "Payment", "OrderSuccess", "Subscription", // <- Added Subscription here
                         "AddWarranty", "WarrantyDetail", "Invoice", "WarrantyAlerts",
                         "Profile", "EditProfile", "PrivacySecurity", "Notifications",
                         "MyOrders", "SavedAddresses", "PaymentMethods", "Compare",
                         "CompareResult", "ChangePassword", "AdminDashboard", "AdminOrderManagement",
                         "AdminAiSettings", "AdminWarranty", "AdminUsers", "AdminViewProfileDetail",
                         "ClaimWarranty", "ExtendWarranty", "AdminPaymentScreen",
-                        // 🚀 NEW: Added Legal Screens to hidden cart list
                         "PrivacyPolicy", "TermsConditions"
                     )
 
