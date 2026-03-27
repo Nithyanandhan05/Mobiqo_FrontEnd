@@ -15,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.sp
 import com.simats.smartelectroai.api.AdminDashboardResponse
 import com.simats.smartelectroai.api.AdminOrder
 import com.simats.smartelectroai.api.RetrofitClient
-import kotlinx.coroutines.delay
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -36,7 +34,6 @@ private val BlueMain = Color(0xFF1976D2)
 private val LightGray = Color(0xFFF5F5F5)
 private val TextGray = Color(0xFF757575)
 private val Green = Color(0xFF4CAF50)
-private val Orange = Color(0xFFFF9800)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,15 +46,13 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
     val sharedPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     val token = sharedPrefs.getString("jwt_token", "") ?: ""
 
-    // 🚀 FIXED: The exact route to match your MainActivity.kt
     val handleLogout = {
         sharedPrefs.edit().remove("jwt_token").apply()
         Toast.makeText(context, "Logged out successfully", Toast.LENGTH_SHORT).show()
-        onNavigate("Login") // Matches "Login" in MainActivity.kt perfectly!
+        onNavigate("Login")
     }
 
     LaunchedEffect(Unit) {
-        // 🚀 FIXED: Stop the 422 Error before it happens
         if (token.isBlank()) {
             onNavigate("Login")
             return@LaunchedEffect
@@ -68,7 +63,6 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
                 if (response.isSuccessful && response.body()?.status == "success") {
                     dashboardData = response.body()
                 } else if (response.code() == 422 || response.code() == 401) {
-                    // Token is expired or invalid. Force logout gracefully.
                     handleLogout()
                 } else {
                     Toast.makeText(context, "Server Error: ${response.code()}", Toast.LENGTH_SHORT).show()
@@ -99,6 +93,7 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
                 enter = fadeIn(tween(600)) + slideInVertically(initialOffsetY = { it / 8 }, animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow))
             ) {
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
                     item {
                         val stats = dashboardData?.stats
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -112,19 +107,29 @@ fun AdminDashboardScreen(onNavigate: (String) -> Unit) {
                             }
                         }
                     }
+
                     item { AiRecommendationCard(visibleState) }
+
+                    // --- FIXED: AdminSectionHeader is called only once now ---
                     item { AdminSectionHeader("Recent Orders", onNavigate) }
+
                     val recentOrders = dashboardData?.recent_orders ?: emptyList()
                     if (recentOrders.isEmpty()) {
                         item { Text("No orders found.", color = Color.Gray) }
                     } else {
                         itemsIndexed(recentOrders) { index, order ->
-                            AnimatedVisibility(visibleState = visibleState, enter = slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = tween(durationMillis = 500, delayMillis = 200 + (index * 150), easing = FastOutSlowInEasing)) + fadeIn(tween(delayMillis = 200 + (index * 150)))) {
+                            AnimatedVisibility(
+                                visibleState = visibleState,
+                                enter = slideInHorizontally(initialOffsetX = { it / 2 }, animationSpec = tween(durationMillis = 500, delayMillis = 200 + (index * 150), easing = FastOutSlowInEasing)) + fadeIn(tween(delayMillis = 200 + (index * 150)))
+                            ) {
                                 OrderItem(order)
                             }
                         }
                     }
-                    item { ExpiringWarrantyCard(visibleState) }
+
+                    // --- REMOVED: ExpiringWarrantyCard ---
+
+                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
         }
@@ -200,18 +205,6 @@ fun OrderItem(order: AdminOrder) {
             Text(text = order.price, color = BlueMain, fontWeight = FontWeight.ExtraBold, textAlign = TextAlign.End)
         }
     }
-}
-
-@Composable
-fun ExpiringWarrantyCard(state: MutableTransitionState<Boolean>) {
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "")
-    AnimatedVisibility(visibleState = state, enter = scaleIn(initialScale = 0.9f, animationSpec = tween(500)) + fadeIn(tween(500))) {
-        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))) {
-            Column(Modifier.padding(16.dp).fillMaxWidth()) { Text("Action Required", color = Orange, fontWeight = FontWeight.Bold, fontSize = 12.sp); Text("2 Warranties Expiring Soon", fontWeight = FontWeight.Bold, fontSize = 16.sp); Spacer(Modifier.height(12.dp)); Button(onClick = { pressed = true }, modifier = Modifier.scale(scale), colors = ButtonDefaults.buttonColors(containerColor = Orange)) { Text("SEND ALERTS", fontWeight = FontWeight.Bold) } }
-        }
-    }
-    LaunchedEffect(pressed) { if (pressed) { delay(150); pressed = false } }
 }
 
 @Composable

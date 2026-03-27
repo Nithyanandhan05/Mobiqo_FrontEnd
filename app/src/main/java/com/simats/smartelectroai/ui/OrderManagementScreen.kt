@@ -18,8 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -101,9 +99,7 @@ fun OrderManagementScreen(onNavigate: (String) -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = { onNavigate("AdminDashboard") }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = AdminTextDark) }
                 },
-                actions = {
-                    IconButton(onClick = { }) { Icon(Icons.Default.Search, "Search", tint = AdminTextDark) }
-                },
+                actions = {}, // 🚀 FIXED: Removed the Search Icon Button
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },

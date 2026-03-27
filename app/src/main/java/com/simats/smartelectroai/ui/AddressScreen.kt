@@ -94,7 +94,7 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
             isFetchingLocation = true
-            showForm = true // Auto-open form to show fetched details
+            showForm = true
 
             fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { location ->
@@ -137,10 +137,8 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
         val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
         if (hasFine || hasCoarse) {
-            // Already have permission, just launch it again to trigger the success logic
             locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         } else {
-            // Request permission
             locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
@@ -179,14 +177,12 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. DELIVER TO HEADER
             item {
                 AnimatedVisibility(visible = isVisible, enter = fadeIn()) {
                     DeliverToHeader(addresses.find { it.id == selectedAddressId })
                 }
             }
 
-            // 2. TOP GPS LOCATION BUTTON
             item {
                 AnimatedVisibility(visible = isVisible, enter = scaleIn() + fadeIn()) {
                     Card(
@@ -212,7 +208,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                 }
             }
 
-            // 3. SAVED ADDRESS LIST CARDS
             if (isLoading) {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -231,7 +226,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                 }
             }
 
-            // 4. ADD NEW ADDRESS BUTTON & EXPANDABLE FORM
             item {
                 AnimatedVisibility(visible = isVisible, enter = slideInVertically(initialOffsetY = { 100 }) + fadeIn()) {
                     Card(
@@ -242,7 +236,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                         elevation = CardDefaults.cardElevation(if (showForm) 4.dp else 0.dp)
                     ) {
                         Column {
-                            // Add New Address Header
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable { showForm = !showForm }.padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -252,7 +245,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                                 Text("Add a new address manually", color = AiBlue, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f))
                             }
 
-                            // Redesigned Address Form Section
                             AnimatedVisibility(visible = showForm, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                                 AddressFormComposable(
                                     name = name, onNameChange = { name = it },
@@ -263,8 +255,27 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                                     isFetchingLocation = isFetchingLocation,
                                     onMapClick = { triggerLocationFetch() },
                                     onSave = {
-                                        if (name.isNotBlank() && phone.isNotBlank() && pin.isNotBlank() && city.isNotBlank() && addrLine.isNotBlank()) {
-                                            val newAddr = AddressModel(null, name, phone, pin, city, addrLine)
+                                        val cleanName = name.trim()
+                                        val cleanPhone = phone.trim()
+                                        val cleanPin = pin.trim()
+                                        val cleanCity = city.trim()
+                                        val cleanAddr = addrLine.trim()
+
+                                        val isDummyPhone = cleanPhone == "1234567890" || cleanPhone == "0987654321" || cleanPhone.all { it == cleanPhone[0] }
+                                        val isValidIndianPhone = cleanPhone.matches(Regex("^[6-9]\\d{9}$"))
+
+                                        if (cleanName.length < 3) {
+                                            Toast.makeText(context, "Please enter a valid Full Name (min 3 characters)", Toast.LENGTH_SHORT).show()
+                                        } else if (cleanPhone.length != 10 || isDummyPhone || !isValidIndianPhone) {
+                                            Toast.makeText(context, "Please enter a valid 10-digit Indian mobile number", Toast.LENGTH_SHORT).show()
+                                        } else if (cleanPin.length != 6) {
+                                            Toast.makeText(context, "Please enter a valid 6-digit Pincode", Toast.LENGTH_SHORT).show()
+                                        } else if (cleanCity.isEmpty()) {
+                                            Toast.makeText(context, "Please enter your City", Toast.LENGTH_SHORT).show()
+                                        } else if (cleanAddr.length < 5) {
+                                            Toast.makeText(context, "Please enter a complete Address", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val newAddr = AddressModel(null, cleanName, cleanPhone, cleanPin, cleanCity, cleanAddr)
                                             saveAddressToBackend(context, newAddr) {
                                                 showForm = false
                                                 name = ""; phone = ""; pin = ""; city = ""; addrLine = ""
@@ -273,8 +284,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                                                     if (updatedList.isNotEmpty()) selectedAddressId = updatedList.last().id ?: -1
                                                 }
                                             }
-                                        } else {
-                                            Toast.makeText(context, "Please fill all details", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 )
@@ -284,7 +293,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
                 }
             }
 
-            // 5. DELIVERY SAFETY INFO
             item {
                 AnimatedVisibility(visible = isVisible, enter = fadeIn(tween(1000))) {
                     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)), border = BorderStroke(1.dp, Color(0xFFC8E6C9))) {
@@ -303,10 +311,6 @@ fun AddressScreen(onBack: () -> Unit = {}, onPayment: () -> Unit = {}) {
         }
     }
 }
-
-// ==========================================
-// UI COMPONENTS
-// ==========================================
 
 @Composable
 fun DeliverToHeader(selectedAddress: AddressModel?) {
@@ -377,7 +381,6 @@ fun FlipkartAddressCard(address: AddressModel, isSelected: Boolean, onSelect: ()
     }
 }
 
-// REDESIGNED FORM: Clean vertical layout, prevents squished text
 @Composable
 fun AddressFormComposable(
     name: String, onNameChange: (String) -> Unit,
@@ -391,7 +394,6 @@ fun AddressFormComposable(
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).padding(bottom = 16.dp)) {
 
-        // Location Button inside form
         OutlinedButton(
             onClick = onMapClick, modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, AiBlue),
@@ -410,16 +412,52 @@ fun AddressFormComposable(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Stacked inputs for cleaner UI
-        AiTextField(name, onNameChange, "Full Name", Icons.Default.Person)
-        AiTextField(phone, onPhoneChange, "Phone Number", Icons.Default.Phone, KeyboardType.Phone)
+        // --- NEW: Restricts Name to letters and spaces only ---
+        AiTextField(
+            value = name,
+            onValueChange = { newValue ->
+                if (newValue.all { it.isLetter() || it.isWhitespace() }) {
+                    onNameChange(newValue)
+                }
+            },
+            label = "Full Name",
+            icon = Icons.Default.Person
+        )
+
+        AiTextField(
+            value = phone,
+            onValueChange = { if (it.length <= 10 && it.all { char -> char.isDigit() }) onPhoneChange(it) },
+            label = "Phone Number",
+            icon = Icons.Default.Phone,
+            keyboardType = KeyboardType.Phone
+        )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.weight(1f)) { AiTextField(pin, onPinChange, "Pincode", Icons.Default.PinDrop, KeyboardType.Number) }
-            Box(Modifier.weight(1f)) { AiTextField(city, onCityChange, "City", Icons.Default.LocationCity) }
+            Box(Modifier.weight(1f)) {
+                AiTextField(
+                    value = pin,
+                    onValueChange = { if (it.length <= 6 && it.all { char -> char.isDigit() }) onPinChange(it) },
+                    label = "Pincode",
+                    icon = Icons.Default.PinDrop,
+                    keyboardType = KeyboardType.Number
+                )
+            }
+            Box(Modifier.weight(1f)) {
+                AiTextField(
+                    value = city,
+                    onValueChange = { onCityChange(it) },
+                    label = "City",
+                    icon = Icons.Default.LocationCity
+                )
+            }
         }
 
-        AiTextField(addrLine, onAddrLineChange, "House No, Building, Street, Area", Icons.Default.Home)
+        AiTextField(
+            value = addrLine,
+            onValueChange = { onAddrLineChange(it) },
+            label = "House No, Building, Street, Area",
+            icon = Icons.Default.Home
+        )
 
         Button(
             onClick = onSave, modifier = Modifier.fillMaxWidth().height(50.dp).padding(top = 16.dp),
@@ -483,13 +521,11 @@ fun fetchAddresses(context: Context, onResult: (List<AddressModel>) -> Unit) {
             if (response.isSuccessful && response.body()?.status == "success") {
                 onResult(response.body()?.addresses ?: emptyList())
             } else {
-                // If it fails, show a toast with the error code so we aren't guessing!
                 Toast.makeText(context, "Server Error: ${response.code()}", Toast.LENGTH_SHORT).show()
                 onResult(emptyList())
             }
         }
         override fun onFailure(call: Call<AddressListResponse>, t: Throwable) {
-            // If Android crashes trying to read the JSON, show the actual crash error
             Toast.makeText(context, "Network/Parsing Error: ${t.message}", Toast.LENGTH_LONG).show()
             onResult(emptyList())
         }

@@ -4,11 +4,8 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke // 🚀 FIXED: Added BorderStroke import
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -32,12 +29,8 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
-import retrofit2.http.POST
-import retrofit2.http.PUT
-import retrofit2.http.Path
 import com.simats.smartelectroai.api.ApiConfig
 
 // ==========================================
@@ -48,7 +41,7 @@ internal data class UniqueAdminUser(
     val full_name: String? = null,
     val email: String? = null,
     val reg_date: String? = null,
-    var is_blocked: Boolean = false,
+    val is_blocked: Boolean = false,
     val total_orders: Int = 0,
     val total_warranties: Int = 0
 )
@@ -59,28 +52,10 @@ internal data class UniqueUserMgmtResponse(
     val users: List<UniqueAdminUser>? = null
 )
 
-internal data class UniqueToggleBlockResponse(
-    val status: String? = null,
-    val message: String? = null,
-    val is_blocked: Boolean = false
-)
-
-internal data class UniqueForgotPasswordRequest(val email: String)
-internal data class UniqueSimpleResponse(val status: String?, val message: String?)
-
 internal interface UniqueUserMgmtApi {
     @GET("/admin/users")
     fun getAllUsers(@Header("Authorization") token: String): Call<UniqueUserMgmtResponse>
-
-    @PUT("/admin/users/{id}/toggle_block")
-    fun toggleUserBlock(@Header("Authorization") token: String, @Path("id") userId: Int): Call<UniqueToggleBlockResponse>
-    @POST("/admin/users/send_reset_link")
-    fun sendResetLink(
-        @Header("Authorization") token: String,
-        @Body request: UniqueForgotPasswordRequest
-    ): Call<UniqueSimpleResponse>
-    @POST("/forgot_password")
-    fun sendResetLink(@Body request: UniqueForgotPasswordRequest): Call<UniqueSimpleResponse>
+    // 🚀 FIXED: Removed the Reset Password and Block User API endpoints to keep the code clean
 }
 
 // ==========================================
@@ -193,7 +168,7 @@ fun AdminUserManagementScreen(onNavigate: (String) -> Unit) {
                                 visible = visibleState.targetState,
                                 enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300 + index * 50)) + fadeIn()
                             ) {
-                                UserManagementCard(user, api, token, context, onNavigate)
+                                UserManagementCard(user, onNavigate)
                             }
                         }
                         item { Spacer(modifier = Modifier.height(20.dp)) }
@@ -207,17 +182,12 @@ fun AdminUserManagementScreen(onNavigate: (String) -> Unit) {
 @Composable
 private fun UserManagementCard(
     user: UniqueAdminUser,
-    api: UniqueUserMgmtApi,
-    token: String,
-    context: Context,
     onNavigate: (String) -> Unit
 ) {
-    var isBlocked by remember { mutableStateOf(user.is_blocked) }
-    var isProcessingBlock by remember { mutableStateOf(false) }
-    var isSendingReset by remember { mutableStateOf(false) }
-
-    val statusColor by animateColorAsState(if (isBlocked) BlockedRed else ActiveGreen, label = "color")
-    val statusBgColor by animateColorAsState(if (isBlocked) BlockedRedBg else ActiveGreenBg, label = "bgcolor")
+    // 🚀 FIXED: Removed processing states since the buttons are gone
+    val isBlocked = user.is_blocked
+    val statusColor = if (isBlocked) BlockedRed else ActiveGreen
+    val statusBgColor = if (isBlocked) BlockedRedBg else ActiveGreenBg
 
     val safeName = user.full_name ?: "Unknown User"
     val safeEmail = user.email ?: "No Email"
@@ -278,85 +248,9 @@ private fun UserManagementCard(
                 StatChip(Icons.Default.VerifiedUser, "${user.total_warranties} Warranties")
             }
 
+            // 🚀 FIXED: Removed the Row containing Reset Password and Block User buttons
+
             Spacer(modifier = Modifier.height(16.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-                OutlinedButton(
-                    onClick = {
-                        if (isSendingReset) return@OutlinedButton
-
-                        if (user.email.isNullOrEmpty()) {
-                            Toast.makeText(context, "User has no email address", Toast.LENGTH_SHORT).show()
-                            return@OutlinedButton
-                        }
-
-                        isSendingReset = true
-                        val req = UniqueForgotPasswordRequest(user.email)
-                        api.sendResetLink("Bearer $token", req).enqueue(object : Callback<UniqueSimpleResponse> {
-                            override fun onResponse(call: Call<UniqueSimpleResponse>, response: Response<UniqueSimpleResponse>) {
-                                isSendingReset = false
-                                if (response.isSuccessful && response.body()?.status == "success") {
-                                    Toast.makeText(context, "Recovery email sent to ${user.email}", Toast.LENGTH_LONG).show()
-                                } else {
-                                    Toast.makeText(context, "Failed to send reset link", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            override fun onFailure(call: Call<UniqueSimpleResponse>, t: Throwable) {
-                                isSendingReset = false
-                                Toast.makeText(context, "Network Error", Toast.LENGTH_SHORT).show()
-                            }
-                        })
-                    },
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BlueMain),
-                    border = BorderStroke(1.dp, BlueMain)
-                ) {
-                    if (isSendingReset) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = BlueMain, strokeWidth = 2.dp)
-                    } else {
-                        Text("Reset Password", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-
-                val actionContainer = if (isBlocked) BlockedRed else Color.White
-                val actionContent = if (isBlocked) Color.White else BlockedRed
-
-                Button(
-                    onClick = {
-                        if (isProcessingBlock) return@Button
-                        isProcessingBlock = true
-                        api.toggleUserBlock("Bearer $token", user.id).enqueue(object : Callback<UniqueToggleBlockResponse> {
-                            override fun onResponse(call: Call<UniqueToggleBlockResponse>, response: Response<UniqueToggleBlockResponse>) {
-                                if (response.isSuccessful && response.body()?.status == "success") {
-                                    isBlocked = response.body()?.is_blocked == true
-                                    Toast.makeText(context, response.body()?.message, Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Failed to update status", Toast.LENGTH_SHORT).show()
-                                }
-                                isProcessingBlock = false
-                            }
-                            override fun onFailure(call: Call<UniqueToggleBlockResponse>, t: Throwable) {
-                                isProcessingBlock = false
-                                Toast.makeText(context, "Network error", Toast.LENGTH_SHORT).show()
-                            }
-                        })
-                    },
-                    modifier = Modifier.weight(1f).height(40.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = actionContainer, contentColor = actionContent),
-                    border = if (!isBlocked) BorderStroke(1.dp, BlockedRed) else null
-                ) {
-                    if (isProcessingBlock) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = actionContent, strokeWidth = 2.dp)
-                    } else {
-                        Text(if (isBlocked) "Unblock User" else "Block User", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
 
             var pressed by remember { mutableStateOf(false) }
             val scale by animateFloatAsState(targetValue = if (pressed) 0.98f else 1f, animationSpec = tween(100), label = "")
@@ -410,11 +304,6 @@ private fun SearchBarInput(query: String, onQueryChange: (String) -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         placeholder = { Text("Search by name, ID or email...", color = TextGray) },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = TextGray) },
-        trailingIcon = {
-            IconButton(onClick = { /* Implement Filters */ }) {
-                Icon(Icons.Default.Tune, contentDescription = "Filter", tint = Color.Black)
-            }
-        },
         colors = TextFieldDefaults.colors(
             focusedContainerColor = LightGrayBg,
             unfocusedContainerColor = LightGrayBg,
@@ -436,11 +325,7 @@ private fun UserManagementTopBar(onNavigate: (String) -> Unit) {
                 Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Back", tint = Color.Black)
             }
         },
-        actions = {
-            IconButton(onClick = { /* Add User Logic */ }) {
-                Icon(Icons.Default.PersonAddAlt1, contentDescription = "Add User", tint = BlueMain)
-            }
-        },
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
     )
 }

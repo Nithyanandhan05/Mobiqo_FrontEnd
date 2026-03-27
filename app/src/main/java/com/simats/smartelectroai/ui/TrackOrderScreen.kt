@@ -1,13 +1,14 @@
 package com.simats.smartelectroai.ui
 
-import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import android.os.Environment
-import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
@@ -28,16 +30,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import com.simats.smartelectroai.api.BaseResponse
 import com.simats.smartelectroai.api.OrderHistoryItem
 import com.simats.smartelectroai.api.OrderTrackingManager
+import com.simats.smartelectroai.api.RetrofitClient
 import kotlinx.coroutines.delay
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import java.io.File
+import java.io.FileOutputStream
+import java.text.NumberFormat
 import java.util.Locale
 
 // --- AMAZON UI COLOR PALETTE ---
@@ -62,6 +75,15 @@ fun TrackOrderScreen(onBack: () -> Unit) {
     val discount = listingPrice - safePrice
     val fees = if (safePrice > 0) 39.0 else 0.0
 
+    // 🚀 State to instantly update UI when cancelled
+    var localStatus by remember { mutableStateOf(order.status) }
+    var isCancelling by remember { mutableStateOf(false) }
+
+    val currentStatus = localStatus.lowercase(Locale.getDefault())
+    val isCancelled = currentStatus.contains("cancel")
+    val isDelivered = currentStatus.contains("delivered")
+    val isShipped = currentStatus.contains("shipped") || currentStatus.contains("out for") || isDelivered
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -72,28 +94,22 @@ fun TrackOrderScreen(onBack: () -> Unit) {
         },
         containerColor = AmzBackground
     ) { paddingValues ->
-
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-
-            // 🚀 FIXED: Using Spacers instead of Modifier.padding to bypass the compiler bug completely!
             Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding()))
 
             // --- 1. PRODUCT & STATUS OVERVIEW ---
             Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(vertical = 16.dp)) {
-                val currentStatus = order.status.lowercase(Locale.getDefault())
-                val isDelivered = currentStatus.contains("delivered")
-                val isShipped = currentStatus.contains("shipped") || currentStatus.contains("out for") || isDelivered
 
                 // Header Status Text
                 Text(
-                    text = if (isDelivered) "Delivered" else if (isShipped) "Arriving soon" else "Ordered",
+                    text = if (isCancelled) "Cancelled" else if (isDelivered) "Delivered" else if (isShipped) "Arriving soon" else "Ordered",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isDelivered) AmzGreen else AmzDarkText,
+                    color = if (isCancelled) AmzRed else if (isDelivered) AmzGreen else AmzDarkText,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
                 Text(
-                    text = if (isDelivered) "Your package was handed directly to resident." else "Your package is being processed.",
+                    text = if (isCancelled) "This order was cancelled and will not be shipped." else if (isDelivered) "Your package was handed directly to resident." else "Your package is being processed.",
                     fontSize = 14.sp,
                     color = AmzGrayText,
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
@@ -102,13 +118,27 @@ fun TrackOrderScreen(onBack: () -> Unit) {
                 // Product Snapshot
                 Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(60.dp).background(Color.White).border(1.dp, AmzBorder, RoundedCornerShape(8.dp)).padding(6.dp)) {
-                        AsyncImage(model = order.image_url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                        AsyncImage(
+                            model = order.image_url,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit,
+                            // Turn image gray if cancelled
+                            colorFilter = if (isCancelled) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null
+                        )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(order.product_name, fontSize = 14.sp, color = AmzDarkText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            text = order.product_name,
+                            fontSize = 14.sp,
+                            color = if (isCancelled) AmzGrayText else AmzDarkText,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text("Qty: 1 • ₹${safePrice.toInt()}", fontSize = 13.sp, color = AmzGrayText)
+                        val formatter = NumberFormat.getIntegerInstance(Locale("en", "IN"))
+                        Text("Qty: 1 • ₹${formatter.format(safePrice.toInt())}", fontSize = 13.sp, color = AmzGrayText)
                     }
                 }
 
@@ -116,9 +146,19 @@ fun TrackOrderScreen(onBack: () -> Unit) {
                 HorizontalDivider(color = AmzBorder.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // 🚀 VERTICAL ANIMATED TRACKER
+                // 🚀 HIDE TRACKER IF CANCELLED
                 Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    VerticalShipmentTracker(status = order.status, orderDate = order.date)
+                    if (isCancelled) {
+                        Box(modifier = Modifier.fillMaxWidth().background(AmzRed.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(16.dp), contentAlignment = Alignment.Center) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Close, null, tint = AmzRed, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Order has been cancelled.", color = AmzRed, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        VerticalShipmentTracker(status = localStatus, orderDate = order.date)
+                    }
                 }
             }
 
@@ -149,17 +189,18 @@ fun TrackOrderScreen(onBack: () -> Unit) {
 
             // --- 3. PRICE DETAILS ---
             Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
+                val formatter = NumberFormat.getIntegerInstance(Locale("en", "IN"))
                 Text("Payment information", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = AmzDarkText, modifier = Modifier.padding(bottom = 12.dp))
 
-                InvoicePriceRow("Listing price", "₹${listingPrice.toInt()}")
-                InvoicePriceRow("Special price", "-₹${discount.toInt()}", isDiscount = true)
-                InvoicePriceRow("Shipping fees", "₹${fees.toInt()}")
+                InvoicePriceRow("Listing price", "₹${formatter.format(listingPrice.toInt())}")
+                InvoicePriceRow("Special price", "-₹${formatter.format(discount.toInt())}", isDiscount = true)
+                InvoicePriceRow("Shipping fees", "₹${formatter.format(fees.toInt())}")
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = AmzBorder)
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Grand Total", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = AmzDarkText)
-                    Text("₹${safePrice.toInt()}", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = AmzDarkText)
+                    Text("₹${formatter.format(safePrice.toInt())}", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = AmzDarkText)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -168,7 +209,7 @@ fun TrackOrderScreen(onBack: () -> Unit) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- 4. ORDER ID & INVOICE BUTTON ---
+            // --- 4. ACTIONS (INVOICE & CANCEL) ---
             Column(modifier = Modifier.fillMaxWidth().background(Color.White).padding(16.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Order ID", fontSize = 14.sp, color = AmzGrayText)
@@ -178,7 +219,7 @@ fun TrackOrderScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
-                    onClick = { generateInvoicePdf(context, order) },
+                    onClick = { downloadInvoiceAsPdf(context, order) },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AmzTeal)
@@ -187,10 +228,49 @@ fun TrackOrderScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Download Invoice", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White)
                 }
+
+                // 🚀 CANCEL BUTTON (Only if not shipped/delivered/cancelled)
+                if (!isShipped && !isCancelled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            isCancelling = true
+                            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+                            val token = prefs.getString("jwt_token", "") ?: ""
+
+                            RetrofitClient.instance.cancelOrder("Bearer $token", order.order_id).enqueue(object : Callback<BaseResponse> {
+                                override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+                                    isCancelling = false
+                                    if (response.isSuccessful && response.body()?.status == "success") {
+                                        Toast.makeText(context, "Order Cancelled Successfully", Toast.LENGTH_SHORT).show()
+                                        localStatus = "Cancelled"
+                                        order.status = "Cancelled"
+                                    } else {
+                                        Toast.makeText(context, "Failed to cancel order.", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
+                                    isCancelling = false
+                                    Toast.makeText(context, "Error: ${t.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        border = BorderStroke(1.dp, AmzRed),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AmzRed)
+                    ) {
+                        if (isCancelling) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AmzRed, strokeWidth = 2.dp)
+                        } else {
+                            Text("Cancel Order", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Push bottom content above navigation bar safely
             Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
         }
     }
@@ -239,10 +319,7 @@ fun VerticalShipmentTracker(status: String, orderDate: String) {
             )
 
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-
-                // --- LEFT: TIMELINE GRAPHICS ---
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(30.dp)) {
-
                     Box(
                         modifier = Modifier
                             .padding(top = 2.dp)
@@ -275,7 +352,6 @@ fun VerticalShipmentTracker(status: String, orderDate: String) {
                     }
                 }
 
-                // --- RIGHT: TEXT CONTENT ---
                 Column(
                     modifier = Modifier
                         .padding(start = 16.dp, bottom = if (isLast) 0.dp else 24.dp)
@@ -315,85 +391,207 @@ private fun InvoicePriceRow(label: String, value: String, isDiscount: Boolean = 
     }
 }
 
-// ==========================================
-// NATIVE PDF GENERATION LOGIC (UNCHANGED)
-// ==========================================
-fun generateInvoicePdf(context: Context, order: OrderHistoryItem) {
+// =========================================================
+// 🚀 NATIVE ANDROID SHARING & PDF GENERATION FUNCTIONS
+// =========================================================
+
+fun generateInvoicePdf(context: Context, order: OrderHistoryItem): File? {
     try {
         val pdfDocument = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // Standard A4 Size
         val page = pdfDocument.startPage(pageInfo)
         val canvas = page.canvas
 
-        val titlePaint = Paint().apply { color = android.graphics.Color.BLACK; textSize = 28f; isFakeBoldText = true }
-        val boldPaint = Paint().apply { color = android.graphics.Color.BLACK; textSize = 16f; isFakeBoldText = true }
-        val normalPaint = Paint().apply { color = android.graphics.Color.DKGRAY; textSize = 14f }
-        val bluePaint = Paint().apply { color = android.graphics.Color.parseColor("#007185"); textSize = 18f; isFakeBoldText = true }
-        val linePaint = Paint().apply { color = android.graphics.Color.LTGRAY; strokeWidth = 2f }
+        // --- CALCULATION LOGIC ---
+        val safePriceStr = order.price.replace(Regex("[^0-9.]"), "")
+        val safePrice = order.raw_price ?: safePriceStr.toDoubleOrNull() ?: 0.0
+        val rate = safePrice / 1.18
+        val gst = safePrice - rate
 
-        canvas.drawText("TAX INVOICE", 40f, 60f, titlePaint)
+        val formatter = NumberFormat.getIntegerInstance(Locale("en", "IN"))
+        val rateStr = formatter.format(rate.toInt())
+        val gstStr = formatter.format(gst.toInt())
+        val totalStr = formatter.format(safePrice.toInt())
 
-        canvas.drawText("Order ID: ${order.invoice_no}", 40f, 110f, normalPaint)
-        canvas.drawText("Date: ${order.date}", 40f, 135f, normalPaint)
-
-        canvas.drawLine(40f, 160f, 555f, 160f, linePaint)
-
-        canvas.drawText("Delivery To:", 40f, 200f, boldPaint)
-        canvas.drawText(order.delivery_name ?: "User", 40f, 230f, normalPaint)
-        canvas.drawText(order.delivery_phone ?: "", 40f, 255f, normalPaint)
-
-        val addressStr = order.delivery_address ?: ""
-        if (addressStr.length > 50) {
-            canvas.drawText(addressStr.substring(0, 50), 40f, 280f, normalPaint)
-            canvas.drawText(addressStr.substring(50), 40f, 305f, normalPaint)
-        } else {
-            canvas.drawText(addressStr, 40f, 280f, normalPaint)
+        // --- PAINTS ---
+        val titlePaint = Paint().apply {
+            textSize = 28f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.rgb(25, 118, 210) // InvBlue
+        }
+        val boldPaint = Paint().apply {
+            textSize = 12f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.BLACK
+        }
+        val normalPaint = Paint().apply {
+            textSize = 11f
+            color = android.graphics.Color.rgb(60, 60, 60)
+        }
+        val smallBoldGray = Paint().apply {
+            textSize = 9f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.GRAY
+        }
+        val rightAlignNormal = Paint(normalPaint).apply { textAlign = Paint.Align.RIGHT }
+        val rightAlignBold = Paint(boldPaint).apply { textAlign = Paint.Align.RIGHT }
+        val dividerPaint = Paint().apply {
+            color = android.graphics.Color.LTGRAY
+            strokeWidth = 1f
         }
 
-        canvas.drawLine(40f, 340f, 555f, 340f, linePaint)
-
-        canvas.drawText("Item Details:", 40f, 380f, boldPaint)
-
-        val productStr = order.product_name
-        if (productStr.length > 60) {
-            canvas.drawText(productStr.substring(0, 60), 40f, 410f, normalPaint)
-            canvas.drawText(productStr.substring(60), 40f, 435f, normalPaint)
-        } else {
-            canvas.drawText(productStr, 40f, 410f, normalPaint)
+        val bgGrayPaint = Paint().apply { color = android.graphics.Color.rgb(245, 247, 250) }
+        val bgGreenPaint = Paint().apply { color = android.graphics.Color.rgb(232, 245, 233) }
+        val greenTextPaint = Paint().apply {
+            textSize = 11f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.rgb(46, 125, 50)
         }
 
-        canvas.drawText(order.price, 450f, 410f, bluePaint)
+        val margin = 50f
+        val rightMargin = 545f
 
-        canvas.drawLine(40f, 480f, 555f, 480f, linePaint)
+        // 1. Header
+        canvas.drawText("Mobiqo", margin, 70f, titlePaint)
+        canvas.drawText("ELECTRONICS PLATFORM", margin, 85f, smallBoldGray)
 
-        canvas.drawText("Total Paid Amount:", 40f, 530f, boldPaint)
-        canvas.drawText(order.price, 450f, 530f, titlePaint)
+        // 2. Order Info Background Box
+        canvas.drawRoundRect(RectF(margin, 110f, rightMargin, 160f), 8f, 8f, bgGrayPaint)
 
-        canvas.drawText("Thank you for shopping with SmartElectro!", 40f, 780f, normalPaint)
+        canvas.drawText("ORDER STATUS", 65f, 130f, smallBoldGray)
+        canvas.drawText(order.status, 65f, 145f, if(order.status.lowercase(Locale.getDefault()).contains("delivered")) greenTextPaint else Paint(boldPaint))
+
+        canvas.drawText("ORDER DATE", 250f, 130f, smallBoldGray)
+        canvas.drawText(order.date, 250f, 145f, boldPaint)
+
+        canvas.drawText("PAYMENT", 400f, 130f, smallBoldGray)
+        canvas.drawText(order.payment_method ?: "Online", 400f, 145f, boldPaint)
+
+        // 3. Invoice Title
+        val largeBold = Paint(boldPaint).apply { textSize = 16f }
+        canvas.drawText("TAX INVOICE", margin, 210f, largeBold)
+        canvas.drawText("${order.invoice_no}", margin, 228f, normalPaint)
+        canvas.drawText("Generated: ${order.date}", margin, 243f, normalPaint)
+
+        // 4. Billed To / Sold By
+        canvas.drawText("BILLED TO", margin, 280f, smallBoldGray)
+        canvas.drawText(order.delivery_name ?: "Customer", margin, 295f, boldPaint)
+        canvas.drawText(order.delivery_phone ?: "", margin, 310f, normalPaint)
+
+        // Chunk long address
+        val address = order.delivery_address ?: ""
+        if (address.length > 40) {
+            canvas.drawText(address.substring(0, 40), margin, 325f, normalPaint)
+            canvas.drawText(address.substring(40), margin, 340f, normalPaint)
+        } else {
+            canvas.drawText(address, margin, 325f, normalPaint)
+        }
+
+        canvas.drawText("SOLD BY", 300f, 280f, smallBoldGray)
+        canvas.drawText("Mobiqo Electronics", 300f, 295f, boldPaint)
+        canvas.drawText("support@mobiqo.com", 300f, 310f, normalPaint)
+        canvas.drawText("www.mobiqo.com", 300f, 325f, normalPaint)
+        canvas.drawText("Tamil Nadu, India 600001", 300f, 340f, normalPaint)
+
+        canvas.drawLine(margin, 360f, rightMargin, 360f, dividerPaint)
+
+        // 5. Table Header Box
+        canvas.drawRect(margin, 370f, rightMargin, 395f, bgGrayPaint)
+
+        canvas.drawText("DESCRIPTION", 60f, 387f, smallBoldGray)
+
+        val colHsn = 320f
+        val colRate = 390f
+        val colGst = 460f
+        val colAmt = 535f
+
+        val rightAlignSmallGray = Paint(smallBoldGray).apply { textAlign = Paint.Align.RIGHT }
+        canvas.drawText("HSN CODE", colHsn, 387f, rightAlignSmallGray)
+        canvas.drawText("RATE", colRate, 387f, rightAlignSmallGray)
+        canvas.drawText("GST @ 18%", colGst, 387f, rightAlignSmallGray)
+        canvas.drawText("AMOUNT", colAmt, 387f, rightAlignSmallGray)
+
+        // 6. Table Rows
+        var currentY = 415f
+
+        // Product Row (Dynamic shortening)
+        val prodName = if(order.product_name.length > 35) order.product_name.substring(0, 35) + "..." else order.product_name
+        canvas.drawText(prodName, 60f, currentY, boldPaint)
+        canvas.drawText("8517", colHsn, currentY, rightAlignNormal)
+        canvas.drawText(rateStr, colRate, currentY, rightAlignNormal)
+        canvas.drawText("₹$gstStr", colGst, currentY, rightAlignNormal)
+        canvas.drawText(totalStr, colAmt, currentY, rightAlignBold)
+
+        currentY += 15f
+        canvas.drawText("Qty: 1", 60f, currentY, normalPaint)
+
+        // Delivery Row
+        currentY += 30f
+        canvas.drawText("Delivery Charges", 60f, currentY, normalPaint)
+        canvas.drawText("-", colHsn, currentY, rightAlignNormal)
+        canvas.drawText("-", colRate, currentY, rightAlignNormal)
+        canvas.drawText("-", colGst, currentY, rightAlignNormal)
+        canvas.drawText("FREE", colAmt, currentY, Paint(greenTextPaint).apply { textAlign = Paint.Align.RIGHT })
+
+        canvas.drawLine(margin, currentY + 15f, rightMargin, currentY + 15f, dividerPaint)
+
+        // 7. Totals Box
+        currentY += 25f
+        canvas.drawRect(margin, currentY, rightMargin, currentY + 30f, bgGrayPaint)
+
+        canvas.drawText("Total Amount", 60f, currentY + 20f, boldPaint)
+        canvas.drawText("₹$gstStr", colGst, currentY + 20f, rightAlignBold)
+
+        val totalPaintBlue = Paint(rightAlignBold).apply { color = android.graphics.Color.rgb(25, 118, 210); textSize = 14f }
+        canvas.drawText("₹$totalStr", colAmt, currentY + 20f, totalPaintBlue)
+
+        // 8. Warranty Box
+        currentY += 60f
+        canvas.drawRoundRect(RectF(margin, currentY, rightMargin, currentY + 65f), 8f, 8f, bgGreenPaint)
+        canvas.drawText("1-Year Manufacturer Warranty Included", 60f, currentY + 25f, greenTextPaint)
+
+        val greenNormal = Paint(normalPaint).apply { color = android.graphics.Color.rgb(46, 125, 50) }
+        canvas.drawText("Warranty Valid Until: 24 Mar 2027", 60f, currentY + 40f, greenNormal)
+        canvas.drawText("Warranty ID: WRN-${order.invoice_no}", 60f, currentY + 55f, greenNormal)
+
+        // 9. Footer
+        val centerGray = Paint(normalPaint).apply { textAlign = Paint.Align.CENTER; textSize = 10f }
+        canvas.drawText("This is a computer-generated invoice and does not require a signature.", 297f, 780f, centerGray)
+        canvas.drawText("Enjoy your Mobiqo purchase!", 297f, 795f, centerGray)
 
         pdfDocument.finishPage(page)
 
-        val resolver = context.contentResolver
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "Invoice_${order.invoice_no}.pdf")
-            put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-        }
-
-        val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-        if (uri != null) {
-            resolver.openOutputStream(uri)?.use { outputStream ->
-                pdfDocument.writeTo(outputStream)
-            }
-            Toast.makeText(context, "Invoice saved to Downloads!", Toast.LENGTH_LONG).show()
-        } else {
-            Toast.makeText(context, "Failed to save Invoice.", Toast.LENGTH_SHORT).show()
-        }
-
+        // Save PDF to Cache for FileProvider
+        val file = File(context.cacheDir, "Mobiqo_Invoice_${order.invoice_no}.pdf")
+        val outputStream = FileOutputStream(file)
+        pdfDocument.writeTo(outputStream)
         pdfDocument.close()
+        outputStream.close()
 
+        return file
     } catch (e: Exception) {
         e.printStackTrace()
-        Toast.makeText(context, "Error generating PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+        return null
+    }
+}
+
+fun downloadInvoiceAsPdf(context: Context, order: OrderHistoryItem) {
+    val file = generateInvoicePdf(context, order)
+    if (file != null) {
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/pdf")
+                flags = Intent.FLAG_ACTIVITY_NO_HISTORY
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(intent)
+            Toast.makeText(context, "Opening PDF...", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "No PDF Viewer installed.", Toast.LENGTH_LONG).show()
+        }
+    } else {
+        Toast.makeText(context, "Failed to generate PDF.", Toast.LENGTH_SHORT).show()
     }
 }

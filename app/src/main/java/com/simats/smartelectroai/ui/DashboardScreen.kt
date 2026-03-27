@@ -44,7 +44,6 @@ import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 
-// --- IMPORT FIREBASE MESSAGING ---
 import com.google.firebase.messaging.FirebaseMessaging
 
 import com.simats.smartelectroai.api.RecommendationManager
@@ -56,6 +55,7 @@ import com.simats.smartelectroai.api.BaseResponse
 import com.simats.smartelectroai.api.ProductItem
 import com.simats.smartelectroai.api.ProductResponse
 import com.simats.smartelectroai.api.SearchDeviceResponse
+import com.simats.smartelectroai.api.MyWarrantiesResponse
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -81,17 +81,17 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
     var isLoadingProducts by remember { mutableStateOf(true) }
     var isSearchingGlobal by remember { mutableStateOf(false) }
 
+    var activeWarrantyCount by remember { mutableIntStateOf(0) }
+    var nextExpiryDate by remember { mutableStateOf<String?>(null) }
+    var isLoadingWarranty by remember { mutableStateOf(true) }
+
     LaunchedEffect(Unit) {
-        // 1. SYNC FCM TOKEN WITH FLASK BACKEND DIRECTLY FROM FIREBASE
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val jwtToken = prefs.getString("jwt_token", "") ?: ""
 
         if (jwtToken.isNotEmpty()) {
             FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                if (!task.isSuccessful) {
-                    Log.e("FCM_SYNC", "Fetching FCM registration token failed", task.exception)
-                    return@addOnCompleteListener
-                }
+                if (!task.isSuccessful) return@addOnCompleteListener
                 val fcmToken = task.result
                 RetrofitClient.instance.updateFcmToken("Bearer $jwtToken", FcmTokenRequest(fcmToken))
                     .enqueue(object : Callback<BaseResponse> {
@@ -99,18 +99,30 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                         override fun onFailure(call: Call<BaseResponse>, t: Throwable) {}
                     })
             }
+
+            RetrofitClient.instance.getMyWarranties("Bearer $jwtToken").enqueue(object : Callback<MyWarrantiesResponse> {
+                override fun onResponse(call: Call<MyWarrantiesResponse>, response: Response<MyWarrantiesResponse>) {
+                    if (response.isSuccessful) {
+                        val devices = response.body()?.devices ?: emptyList()
+                        val activeDevices = devices.filter { it.status != "Expired" && it.status != "Rejected" }
+                        activeWarrantyCount = activeDevices.size
+                        nextExpiryDate = activeDevices.firstOrNull()?.expiry
+                    }
+                    isLoadingWarranty = false
+                }
+                override fun onFailure(call: Call<MyWarrantiesResponse>, t: Throwable) {
+                    isLoadingWarranty = false
+                }
+            })
         }
 
-        // 2. FETCH TOP PRODUCTS
         RetrofitClient.instance.getAllProducts().enqueue(object: Callback<ProductResponse> {
             override fun onResponse(call: Call<ProductResponse>, response: Response<ProductResponse>) {
                 if(response.isSuccessful) {
                     val allProducts = response.body()?.products ?: emptyList()
                     topProducts = allProducts.filter {
-                        val priceStr = it.price?.replace(Regex("[^0-9]"), "")
-                        val priceInt = priceStr?.toIntOrNull() ?: 0
-                        priceInt > 0
-                    }
+                        !it.name.isNullOrBlank() && !it.name.contains("Unknown", ignoreCase = true)
+                    }.distinctBy { it.name }
                 }
                 isLoadingProducts = false
             }
@@ -120,7 +132,6 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
         })
     }
 
-    // Animation States
     var isHeaderVisible by remember { mutableStateOf(false) }
     var isSearchVisible by remember { mutableStateOf(false) }
     var isAiCardVisible by remember { mutableStateOf(false) }
@@ -154,7 +165,7 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
             Spacer(modifier = Modifier.height(16.dp))
 
             AnimatedVisibility(visible = isHeaderVisible, enter = slideInVertically { -50 } + fadeIn(tween(500))) {
-                AnimatedGreetingHeader(onNavigate)
+                AnimatedGreetingHeader()
             }
 
             AnimatedVisibility(visible = isSearchVisible, enter = scaleIn(initialScale = 0.95f) + fadeIn(tween(500))) {
@@ -167,7 +178,11 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
 
                         if (localMatch != null) {
                             isSearchingGlobal = false
-                            val safePrice = if (localMatch.price == "0" || localMatch.price == "0.0") "45000" else localMatch.price
+
+                            val safePrice = if (localMatch.price == "0" || localMatch.price == "0.0" || localMatch.price.isNullOrBlank()) {
+                                val hashPrice = 10000 + (Math.abs(localMatch.name.hashCode()) % 40000)
+                                hashPrice.toString()
+                            } else localMatch.price
 
                             RecommendationManager.result = RecommendationData(
                                 top_match = TopMatch(
@@ -176,14 +191,14 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                     price = safePrice,
                                     match_percent = "99%",
                                     battery_spec = "5000mAh Battery",
-                                    display_spec = "6.7 inch AMOLED",
-                                    processor_spec = "Flagship Octa-Core",
-                                    camera_spec = "50MP Triple Camera",
+                                    display_spec = "6.5 inch Display",
+                                    processor_spec = "Octa-Core Processor",
+                                    camera_spec = "50MP Camera",
                                     image_url = localMatch.image_url,
                                     image_urls = listOfNotNull(localMatch.image_url)
                                 ),
                                 alternatives = emptyList(),
-                                analysis = "Loaded instantly from your MotiqoDatabase."
+                                analysis = "Loaded instantly from your database."
                             )
                             onNavigate("ProductDetail")
                         } else {
@@ -192,9 +207,29 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                     isSearchingGlobal = false
                                     val firstResult = response.body()?.results?.firstOrNull()
                                     if (firstResult != null) {
-                                        val priceStr = firstResult.price ?: "45000"
+
+                                        val priceStr = firstResult.price ?: "0"
                                         val hasDigits = priceStr.any { it.isDigit() }
-                                        val safePrice = if (hasDigits) priceStr else "45000"
+                                        val safePrice = if (hasDigits && priceStr != "0") priceStr else {
+                                            val hashPrice = 10000 + (Math.abs(firstResult.name.hashCode()) % 40000)
+                                            hashPrice.toString()
+                                        }
+
+                                        var bSpec = "5000mAh Battery"
+                                        var dSpec = "6.5 inch Display"
+                                        var pSpec = "Octa-Core Processor"
+                                        var cSpec = "50MP Camera"
+
+                                        if (!firstResult.specs.isNullOrBlank()) {
+                                            val specParts = firstResult.specs.split("|", ",").map { it.trim() }
+                                            specParts.forEach { part ->
+                                                val lower = part.lowercase()
+                                                if (lower.contains("mah") || lower.contains("battery")) bSpec = part
+                                                else if (lower.contains("mp") || lower.contains("camera") || lower.contains("lens")) cSpec = part
+                                                else if (lower.contains("inch") || lower.contains("amoled") || lower.contains("oled") || lower.contains("lcd") || lower.contains("hz") || lower.contains("display") || lower.contains("pixel")) dSpec = part
+                                                else if (lower.contains("snapdragon") || lower.contains("dimensity") || lower.contains("bionic") || lower.contains("core") || lower.contains("ghz") || lower.contains("gen") || lower.contains("processor") || lower.contains("chip") || lower.contains("cpu")) pSpec = part
+                                            }
+                                        }
 
                                         RecommendationManager.result = RecommendationData(
                                             top_match = TopMatch(
@@ -202,15 +237,15 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                                                 name = firstResult.name,
                                                 price = safePrice,
                                                 match_percent = "95%",
-                                                battery_spec = "5000mAh Battery",
-                                                display_spec = "6.7 inch AMOLED",
-                                                processor_spec = firstResult.specs ?: "Flagship Octa-Core",
-                                                camera_spec = "50MP Triple Camera",
+                                                battery_spec = bSpec,
+                                                display_spec = dSpec,
+                                                processor_spec = pSpec,
+                                                camera_spec = cSpec,
                                                 image_url = firstResult.image_url,
                                                 image_urls = listOfNotNull(firstResult.image_url)
                                             ),
                                             alternatives = emptyList(),
-                                            analysis = "Device retrieved via internet search. Compare this device to unlock full deep-dive specs."
+                                            analysis = "Device retrieved via internet search. Match scores are estimated based on specifications."
                                         )
                                         onNavigate("ProductDetail")
                                     } else {
@@ -242,19 +277,28 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
                             item { CircularProgressIndicator(color = PrimaryBlue, modifier = Modifier.padding(32.dp)) }
                         } else if (topProducts.isNotEmpty()) {
                             items(topProducts) { product ->
+                                // --- FIXED: APPLY DYNAMIC FALLBACK PRICE TO DASHBOARD LIST ---
+                                val rawPrice = product.price ?: "0"
+                                val cleanRaw = rawPrice.substringBefore(".").replace(Regex("[^0-9]"), "")
+                                val parsedPrice = cleanRaw.toIntOrNull() ?: 0
+
+                                val displayPrice = if (parsedPrice <= 0 && !product.name.isNullOrBlank()) {
+                                    (10000 + (Math.abs(product.name.hashCode()) % 40000)).toString()
+                                } else {
+                                    parsedPrice.toString()
+                                }
+
                                 AnimatedProductCard(
                                     name = product.name ?: "Device",
-                                    price = product.price ?: "0",
+                                    price = displayPrice,
                                     imageUrl = product.image_url,
                                     match = "99%"
                                 ) {
-                                    val safePrice = if (product.price == "0" || product.price == "0.0") "45000" else product.price
-
                                     RecommendationManager.result = RecommendationData(
                                         top_match = TopMatch(
                                             id = product.id ?: 0,
                                             name = product.name,
-                                            price = safePrice,
+                                            price = displayPrice,
                                             match_percent = "99%",
                                             battery_spec = "5000mAh Battery",
                                             display_spec = "6.7 inch AMOLED",
@@ -277,7 +321,11 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
             }
 
             AnimatedVisibility(visible = isWarrantyVisible, enter = slideInHorizontally { 100 } + fadeIn(tween(800))) {
-                AnimatedWarrantyCard { onNavigate("Warranty") }
+                AnimatedWarrantyCard(
+                    activeCount = activeWarrantyCount,
+                    nextExpiry = nextExpiryDate,
+                    isLoading = isLoadingWarranty
+                ) { onNavigate("Warranty") }
             }
 
             Spacer(modifier = Modifier.height(100.dp))
@@ -285,40 +333,15 @@ fun DashboardScreen(onAskAiAssistant: () -> Unit, onNavigate: (String) -> Unit) 
     }
 }
 
-// ==========================================
-// 1. GREETING HEADER (MODIFIED FOR SCANNER)
-// ==========================================
 @Composable
-private fun AnimatedGreetingHeader(onNavigate: (String) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column {
-            Text("Good Morning,", color = GrayText, fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text("AI is ready to assist you today", color = PrimaryBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-        }
-
-        // REPLACED PROFILE ICON WITH SCAN LENS ICON
-        val scanInteraction = remember { MutableInteractionSource() }
-        val isPressed by scanInteraction.collectIsPressedAsState()
-        val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, label = "")
-
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .scale(scale)
-                .clip(CircleShape)
-                .background(LightBlue)
-                .clickable(interactionSource = scanInteraction, indication = null) { onNavigate("ScanDevice") },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Default.CameraAlt, contentDescription = "Scan Device", tint = PrimaryBlue, modifier = Modifier.size(24.dp))
-        }
+private fun AnimatedGreetingHeader() {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Good Morning,", color = GrayText, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("AI is ready to assist you today", color = PrimaryBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
     }
 }
 
-// ==========================================
-// 2. SEARCH BAR
-// ==========================================
 @Composable
 private fun AnimatedSearchBar(isSearching: Boolean, onSearch: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
@@ -366,9 +389,6 @@ private fun AnimatedSearchBar(isSearching: Boolean, onSearch: (String) -> Unit) 
     }
 }
 
-// ==========================================
-// 3. AI ASSISTANT CARD
-// ==========================================
 @Composable
 private fun AnimatedAiAssistantCard(onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -398,9 +418,6 @@ private fun AnimatedAiAssistantCard(onClick: () -> Unit) {
     }
 }
 
-// ==========================================
-// 5. PRODUCT CARD
-// ==========================================
 @Composable
 private fun AnimatedProductCard(name: String, price: String, imageUrl: String?, match: String, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -432,29 +449,48 @@ private fun AnimatedProductCard(name: String, price: String, imageUrl: String?, 
             Text(name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = DarkText, maxLines = 1)
             Spacer(modifier = Modifier.height(4.dp))
 
-            val priceInt = price.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+            val cleanPrice = price.substringBefore(".").replace(Regex("[^0-9]"), "")
+            val priceInt = cleanPrice.toIntOrNull() ?: 0
+
             Text("₹%,d".format(priceInt), fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = PrimaryBlue)
         }
     }
 }
 
-// ==========================================
-// 6. WARRANTY CARD
-// ==========================================
 @Composable
-private fun AnimatedWarrantyCard(onClick: () -> Unit) {
+private fun AnimatedWarrantyCard(activeCount: Int, nextExpiry: String?, isLoading: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "")
 
-    Card(modifier = Modifier.fillMaxWidth().scale(scale).clickable(interactionSource = interactionSource, indication = null) { onClick() }, shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = BgWhite), border = BorderStroke(1.dp, Color(0xFFE3F2FD)), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().scale(scale).clickable(interactionSource = interactionSource, indication = null) { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = BgWhite),
+        border = BorderStroke(1.dp, Color(0xFFE3F2FD)),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(48.dp).background(LightBlue, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(24.dp)) }
+                Box(
+                    modifier = Modifier.size(48.dp).background(LightBlue, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(if (activeCount > 0) Icons.Default.VerifiedUser else Icons.Default.Warning, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(24.dp))
+                }
                 Spacer(modifier = Modifier.width(16.dp))
+
                 Column {
-                    Text("Warranty Active", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkText)
-                    Text("Valid till Oct 2026", fontSize = 12.sp, color = GrayText)
+                    if (isLoading) {
+                        Text("Checking Warranties...", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkText)
+                        Text("Please wait", fontSize = 12.sp, color = GrayText)
+                    } else if (activeCount > 0) {
+                        Text("$activeCount device${if(activeCount > 1) "s" else ""} protected", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkText)
+                        Text(if (nextExpiry != null) "Next expiry: $nextExpiry" else "All warranties secure", fontSize = 12.sp, color = GrayText)
+                    } else {
+                        Text("No Active Warranties", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = DarkText)
+                        Text("Tap to protect a device", fontSize = 12.sp, color = GrayText)
+                    }
                 }
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.LightGray)
@@ -462,9 +498,6 @@ private fun AnimatedWarrantyCard(onClick: () -> Unit) {
     }
 }
 
-// ==========================================
-// 7. FLOATING DOCK
-// ==========================================
 @Composable
 private fun AnimatedFloatingDock(onNavigate: (String) -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "glow")

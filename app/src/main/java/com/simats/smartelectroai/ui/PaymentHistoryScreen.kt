@@ -80,17 +80,8 @@ fun PaymentHistoryScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                 override fun onResponse(call: Call<PaymentHistoryResponse>, response: Response<PaymentHistoryResponse>) {
                     isLoading = false
                     if (response.isSuccessful) {
+                        // 🚀 FIXED: Removed the hardcoded UI testing fallback here!
                         historyList = response.body()?.history ?: emptyList()
-
-                        // FALLBACK FOR UI TESTING (Remove this when backend is ready)
-                        if (historyList.isEmpty()) {
-                            historyList = listOf(
-                                PaymentHistoryItem(1, "ORD-10024", "TXN-AB892", "Credit Card", "₹84,999", "Oct 12, 10:30 AM", "Successful"),
-                                PaymentHistoryItem(2, "ORD-10025", "TXN-CD113", "UPI", "₹12,499", "Oct 14, 02:15 PM", "Pending"),
-                                PaymentHistoryItem(3, "ORD-10026", "TXN-EF554", "Wallet", "₹1,999", "Oct 15, 09:00 AM", "Failed")
-                            )
-                        }
-
                         visibleState.targetState = true
                     }
                 }

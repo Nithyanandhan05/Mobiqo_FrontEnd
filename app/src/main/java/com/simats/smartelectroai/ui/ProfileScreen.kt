@@ -39,9 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.simats.smartelectroai.R
-import com.simats.smartelectroai.api.ProfileData
-import com.simats.smartelectroai.api.ProfileResponse
-import com.simats.smartelectroai.api.RetrofitClient
+import com.simats.smartelectroai.api.*
 import kotlinx.coroutines.delay
 import retrofit2.Call
 import retrofit2.Callback
@@ -65,18 +63,57 @@ fun ProfileScreen(onNavigate: (String) -> Unit) {
     var profileData by remember { mutableStateOf<ProfileData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
 
+    // --- NEW: Accurate tracking states bypassing the backend mock data ---
+    var realOrderCount by remember { mutableIntStateOf(0) }
+    var realWarrantyCount by remember { mutableIntStateOf(0) }
+    var realAddressCount by remember { mutableIntStateOf(0) }
+    var realAiCount by remember { mutableIntStateOf(0) }
+
     LaunchedEffect(Unit) {
         val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         val token = prefs.getString("jwt_token", "")
 
+        // Accurate AI usage tracking from device
+        realAiCount = prefs.getInt("ai_usage_count", 0)
+
         if (!token.isNullOrEmpty()) {
-            RetrofitClient.instance.getProfile("Bearer $token").enqueue(object : Callback<ProfileResponse> {
+            val authHeader = "Bearer $token"
+
+            // 1. Fetch Profile Name and Email ONLY
+            RetrofitClient.instance.getProfile(authHeader).enqueue(object : Callback<ProfileResponse> {
                 override fun onResponse(call: Call<ProfileResponse>, response: Response<ProfileResponse>) {
                     isLoading = false
                     if (response.isSuccessful) profileData = response.body()?.profile
                 }
                 override fun onFailure(call: Call<ProfileResponse>, t: Throwable) { isLoading = false }
             })
+
+            // 2. Fetch ACCURATE Orders Count
+            RetrofitClient.instance.getMyOrders(authHeader).enqueue(object : Callback<MyOrdersResponse> {
+                override fun onResponse(call: Call<MyOrdersResponse>, response: Response<MyOrdersResponse>) {
+                    if (response.isSuccessful) realOrderCount = response.body()?.orders?.size ?: 0
+                }
+                override fun onFailure(call: Call<MyOrdersResponse>, t: Throwable) {}
+            })
+
+            // 3. Fetch ACCURATE Warranties Count
+            RetrofitClient.instance.getMyWarranties(authHeader).enqueue(object : Callback<MyWarrantiesResponse> {
+                override fun onResponse(call: Call<MyWarrantiesResponse>, response: Response<MyWarrantiesResponse>) {
+                    if (response.isSuccessful) {
+                        realWarrantyCount = response.body()?.devices?.filter { it.status != "Expired" && it.status != "Rejected" }?.size ?: 0
+                    }
+                }
+                override fun onFailure(call: Call<MyWarrantiesResponse>, t: Throwable) {}
+            })
+
+            // 4. Fetch ACCURATE Addresses Count
+            RetrofitClient.instance.getAddresses(authHeader).enqueue(object : Callback<AddressListResponse> {
+                override fun onResponse(call: Call<AddressListResponse>, response: Response<AddressListResponse>) {
+                    if (response.isSuccessful) realAddressCount = response.body()?.addresses?.size ?: 0
+                }
+                override fun onFailure(call: Call<AddressListResponse>, t: Throwable) {}
+            })
+
         } else {
             isLoading = false
         }
@@ -112,9 +149,14 @@ fun ProfileScreen(onNavigate: (String) -> Unit) {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // SECTION 2: Animated Stats
+            // SECTION 2: Animated Stats (Using REAL dynamic data)
             AnimatedVisibility(visible = isStatsVisible, enter = slideInVertically(initialOffsetY = { it/2 }) + fadeIn()) {
-                PrivateAiStatsRow(profileData)
+                PrivateAiStatsRow(
+                    orders = realOrderCount,
+                    warranties = realWarrantyCount,
+                    addresses = realAddressCount,
+                    aiUses = realAiCount
+                )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -182,20 +224,25 @@ private fun PrivateAiProfileHeader(data: ProfileData?) {
     }
 }
 
+// Updated to take explicit integers instead of the profile object
 @Composable
-private fun PrivateAiStatsRow(data: ProfileData?) {
+private fun PrivateAiStatsRow(orders: Int, warranties: Int, addresses: Int, aiUses: Int) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-        PrivateAnimatedStatBox("Orders", data?.total_orders ?: 0)
-        PrivateAnimatedStatBox("Warranties", data?.active_warranties ?: 0)
-        PrivateAnimatedStatBox("Addresses", data?.saved_addresses ?: 0)
-        PrivateAnimatedStatBox("AI Uses", data?.ai_searches ?: 0)
+        PrivateAnimatedStatBox("Orders", orders)
+        PrivateAnimatedStatBox("Warranties", warranties)
+        PrivateAnimatedStatBox("Addresses", addresses)
+        PrivateAnimatedStatBox("AI Uses", aiUses)
     }
 }
 
 @Composable
 private fun PrivateAnimatedStatBox(label: String, targetValue: Int) {
     val animValue = remember { Animatable(0f) }
-    LaunchedEffect(targetValue) { animValue.animateTo(targetValue.toFloat(), animationSpec = tween(1500, easing = FastOutSlowInEasing)) }
+
+    // Animate safely to the target value
+    LaunchedEffect(targetValue) {
+        animValue.animateTo(targetValue.toFloat(), animationSpec = tween(1500, easing = FastOutSlowInEasing))
+    }
 
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), elevation = CardDefaults.cardElevation(2.dp), modifier = Modifier.size(80.dp)) {
         Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {

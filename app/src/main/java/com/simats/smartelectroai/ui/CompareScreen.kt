@@ -1,6 +1,6 @@
 package com.simats.smartelectroai.ui
 
-import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -10,7 +10,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,20 +63,14 @@ fun CompareScreen(
     onNavigate: (String) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("All") }
     val selectedDevices = remember { mutableStateListOf<SearchDeviceResult>() }
 
     val searchResults by viewModel.searchResults.collectAsState()
-    val isSearching by viewModel.isSearching.collectAsState() // NEW: Observe search state
+    val isSearching by viewModel.isSearching.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    val filteredDevices = searchResults.filter { device ->
-        (selectedCategory == "All" || device.category == selectedCategory)
-    }
-
     LaunchedEffect(Unit) {
-        // 🚀 FIXED: Pass an empty string so the backend knows to load Trending devices
-        viewModel.searchDevice("")
+        viewModel.searchDevice("") // Load default list initially
     }
 
     Scaffold(
@@ -133,7 +126,7 @@ fun CompareScreen(
                         onValueChange = {
                             searchQuery = it
                             if (it.isEmpty()) {
-                                viewModel.searchDevice("a")
+                                viewModel.searchDevice("")
                             }
                         },
                         singleLine = true,
@@ -153,77 +146,46 @@ fun CompareScreen(
                             innerTextField()
                         }
                     )
-
-                    // NEW: Mini loading indicator inside the search bar
-                    if (isSearching) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = CompBlue, strokeWidth = 2.dp)
-                    }
                 }
             }
 
-            // Category Chips
-            Spacer(modifier = Modifier.height(16.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val categories = listOf("All", "Budget", "Gaming", "Camera", "5G")
-                items(categories) { category ->
-                    val isSelected = category == selectedCategory
-                    Box(
-                        modifier = Modifier
-                            .border(width = if (isSelected) 0.dp else 1.dp, color = if (isSelected) Color.Transparent else Color(0xFFE0E0E0), shape = RoundedCornerShape(50))
-                            .background(color = if (isSelected) CompBlue else Color.White, shape = RoundedCornerShape(50))
-                            .clickable { selectedCategory = category }
-                            .padding(horizontal = 20.dp, vertical = 8.dp)
-                    ) {
-                        Text(category, color = if (isSelected) Color.White else CompTextSub, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = if (searchQuery.isEmpty()) "Recent Comparisons" else "Search Results",
+                text = if (searchQuery.isEmpty()) "Trending Devices" else "Search Results",
                 fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = CompTextMain
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // NEW: Animated Content block to crossfade between loading, empty, and list states
-            AnimatedContent(
-                targetState = isSearching,
-                modifier = Modifier.weight(1f),
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
-                label = "search_animation"
-            ) { searching ->
-                if (searching) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = CompBlue, modifier = Modifier.size(40.dp), strokeWidth = 3.dp)
+            // Loading / Empty State Handling
+            if (isSearching) {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = CompBlue)
+                }
+            } else if (searchResults.isEmpty()) {
+                Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Search, null, modifier = Modifier.size(48.dp), tint = Color(0xFFE0E0E0))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("No devices found", color = CompTextSub)
                     }
-                } else if (filteredDevices.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize().padding(top = 40.dp), contentAlignment = Alignment.TopCenter) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Search, null, modifier = Modifier.size(48.dp), tint = Color(0xFFE0E0E0))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("No devices found", color = CompTextSub)
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        contentPadding = PaddingValues(bottom = 20.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(filteredDevices) { device ->
-                            val isAdded = selectedDevices.contains(device)
-                            CompareDeviceCard(
-                                device = device,
-                                isAdded = isAdded,
-                                onToggle = {
-                                    if (isAdded) selectedDevices.remove(device)
-                                    else if (selectedDevices.size < 2) selectedDevices.add(device)
-                                }
-                            )
-                        }
+                }
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(bottom = 20.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    items(searchResults) { device ->
+                        val isAdded = selectedDevices.contains(device)
+                        CompareDeviceCard(
+                            device = device,
+                            isAdded = isAdded,
+                            onToggle = {
+                                if (isAdded) selectedDevices.remove(device)
+                                else if (selectedDevices.size < 2) selectedDevices.add(device)
+                            }
+                        )
                     }
                 }
             }

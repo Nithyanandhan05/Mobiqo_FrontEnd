@@ -57,7 +57,7 @@ import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
 
-// --- NEW: RETROFIT IMPORTS FOR FCM SYNC ---
+// --- RETROFIT IMPORTS ---
 import com.simats.smartelectroai.api.RetrofitClient
 import com.simats.smartelectroai.api.FcmTokenRequest
 import com.simats.smartelectroai.api.BaseResponse
@@ -273,12 +273,36 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                                     OrderSuccessScreen(
                                         onContinueShopping = {
                                             CartManager.clear()
-                                            // Reset backstack completely so "Back" doesn't return to payment!
                                             navigateTo("Dashboard")
                                         },
-                                        onTrackDelivery = { // Added the tracking navigation event mapped to OrderInvoice
+                                        onTrackDelivery = {
+                                            val firstItem = CartManager.items.firstOrNull()
+                                            if (firstItem != null) {
+                                                val orderId = com.simats.smartelectroai.api.OrderContext.currentOrderId
+                                                val totalAmt = com.simats.smartelectroai.api.OrderContext.currentTotalAmount
+                                                val todayStr = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(java.util.Date())
+
+                                                com.simats.smartelectroai.api.OrderTrackingManager.currentOrder = com.simats.smartelectroai.api.OrderHistoryItem(
+                                                    order_id = orderId,
+                                                    invoice_no = "ORD-$orderId",
+                                                    product_name = firstItem.name,
+                                                    price = "₹$totalAmt",
+                                                    raw_price = totalAmt.toDouble(),
+                                                    image_url = firstItem.imageUrl,
+                                                    date = todayStr,
+                                                    status = "Ordered",
+                                                    delivery_status = "Pending",
+                                                    delivery_step = 0,
+                                                    delivery_text = "Your package is being processed.",
+                                                    status_color = "#067D62",
+                                                    delivery_name = "Customer",
+                                                    delivery_address = "Address securely captured during checkout.",
+                                                    delivery_phone = "Stored securely",
+                                                    payment_method = "Online"
+                                                )
+                                            }
                                             CartManager.clear()
-                                            navigateTo("OrderInvoice")
+                                            navigateTo("TrackOrder")
                                         }
                                     )
                                 }
@@ -338,6 +362,10 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                             "EditProfile" -> EditProfileScreen(onBack = { navigateBack() })
                             "PrivacySecurity" -> PrivacySecurityScreen(onBack = { navigateBack() }, onNavigate = { screen -> navigateTo(screen) })
                             "ChangePassword" -> ChangePasswordScreen(onBack = { navigateBack() })
+                            // 🚀 NEW: Added Legal Screens Routing
+                            "PrivacyPolicy" -> PrivacyPolicyScreen(onBack = { navigateBack() })
+                            "TermsConditions" -> TermsConditionsScreen(onBack = { navigateBack() })
+
                             "Notifications" -> NotificationsScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
                             "MyOrders" -> MyOrdersScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
                             "SavedAddresses" -> SavedAddressesScreen(onBack = { navigateBack() }, onNavigate = { navigateTo(it) })
@@ -372,13 +400,15 @@ class MainActivity : FragmentActivity(), PaymentResultWithDataListener {
                     // Floating Action Button Cart
                     val hideCartScreens = setOf(
                         "Splash", "Welcome", "Onboarding", "Login", "Register", "OtpVerification", "ForgotPassword",
-                        "MyCart", "Address", "Payment", "OrderSuccess", // <- Ensures it hides here
+                        "MyCart", "Address", "Payment", "OrderSuccess",
                         "AddWarranty", "WarrantyDetail", "Invoice", "WarrantyAlerts",
                         "Profile", "EditProfile", "PrivacySecurity", "Notifications",
                         "MyOrders", "SavedAddresses", "PaymentMethods", "Compare",
                         "CompareResult", "ChangePassword", "AdminDashboard", "AdminOrderManagement",
                         "AdminAiSettings", "AdminWarranty", "AdminUsers", "AdminViewProfileDetail",
-                        "ClaimWarranty", "ExtendWarranty", "AdminPaymentScreen"
+                        "ClaimWarranty", "ExtendWarranty", "AdminPaymentScreen",
+                        // 🚀 NEW: Added Legal Screens to hidden cart list
+                        "PrivacyPolicy", "TermsConditions"
                     )
 
                     if (realCartCount > 0 && currentScreen !in hideCartScreens) {

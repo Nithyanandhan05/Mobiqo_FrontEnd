@@ -16,7 +16,7 @@ import okhttp3.RequestBody
 // update across the ENTIRE Android application.
 // ==========================================
 object ApiConfig {
-    const val BASE_URL = "http://10.100.2.213:5000/"
+    const val BASE_URL = "http://180.235.121.253:8130/"
 }
 
 // --- DATA MODELS ---
@@ -38,12 +38,12 @@ data class AdminPaymentsResponse(val status: String, val payments: List<AdminPay
 data class FcmTokenRequest(val fcm_token: String, val platform: String = "android")
 data class OrderHistoryItem(
     val order_id: Int, val invoice_no: String?, val product_name: String, val price: String,
-    val raw_price: Double?, val image_url: String?, val date: String, val status: String,
+    val raw_price: Double?, val image_url: String?, val date: String, var status: String, // 🚀 Changed status to var so we can update it locally
     val delivery_status: String?, val delivery_step: Int, val delivery_text: String?,
     val status_color: String, val delivery_name: String?, val delivery_address: String?,
     val delivery_phone: String?, val payment_method: String?
 )
-// Add this new data class for detailed scanner results
+
 data class ScanDeviceData(
     val id: Int,
     val name: String,
@@ -57,7 +57,6 @@ data class ScanDeviceData(
     val image_url: String?
 )
 
-// Update your ScanResponse to use the new ScanDeviceData
 data class ScanResponse(
     val status: String,
     val message: String?,
@@ -74,7 +73,7 @@ data class AuthResponse(val status: String?, val message: String?, val token: St
 data class AiRequest(
     val budget: Float,
     val usage: String,
-    val brand: String,    // Send as "Samsung,Apple,OnePlus" — backend handles splitting
+    val brand: String,
     val storage: String,
     val battery: String,
     val notes: String
@@ -83,6 +82,16 @@ data class RecommendationData(val top_match: TopMatch?, val alternatives: List<A
 data class TopMatch(val id: Int?, val name: String?, val price: String?, val match_percent: String?, val battery_spec: String?, val display_spec: String?, val processor_spec: String?, val camera_spec: String?, val image_url: String?, val image_urls: List<String>?)
 data class Alternative(val name: String?, val price: String?, val match_percent: String?, val image_url: String?)
 data class AiResponse(val status: String?, val message: String?, val data: RecommendationData?)
+
+// 🌟 NEW DATA CLASS FOR FETCHING SPECS DIRECTLY
+data class ProductSpecsResponse(
+    val status: String,
+    val battery_spec: String?,
+    val display_spec: String?,
+    val processor_spec: String?,
+    val camera_spec: String?
+)
+
 data class OrderRequest(val product_id: Int)
 data class BaseResponse(val status: String, val message: String)
 data class OrderResponse(val status: String, val message: String, val order_id: Int?)
@@ -92,7 +101,17 @@ data class AddressModel(val id: Int? = null, val full_name: String, val mobile: 
 data class AddressListResponse(val status: String, val addresses: List<AddressModel>)
 data class SearchDeviceResult(val id: Int, val name: String, val price: String, val match_percent: String, val specs: String, val category: String, val image_url: String?)
 data class SearchDeviceResponse(val status: String, val results: List<SearchDeviceResult>?)
-data class CartItemModel(val id: Int, val name: String, val price: Int, val originalPrice: Int, val imageUrl: String, val specs: String, var quantity: Int = 1)
+data class CartItemModel(
+    val id: Int,
+    val name: String,
+    val price: Int,
+    val originalPrice: Int,
+    val imageUrl: String,
+    val specs: String,
+    var quantity: Int = 1,
+    var hasExtendedWarranty: Boolean = false,
+    var warrantyPrice: Int = 0
+)
 data class CompareRequest(val device1: String, val device2: String)
 data class ComparePerformance(val processor: String, val cores: String, val ram: String)
 data class CompareDisplay(val type: String, val resolution: String, val refresh_rate: String, val size: String)
@@ -112,7 +131,6 @@ data class AiLogItem(val log_id: String, val preferences: String, val product: S
 data class AiSettingsData(val is_enabled: Boolean, val gaming: Int, val camera: Int, val battery: Int, val budget: Int, val engine_mode: String, val logs: List<AiLogItem>)
 data class HistoryItem(val title: String, val date: String, val desc: String, val is_last: Boolean)
 
-// FIXED: Added image_url
 data class WarrantyDetailData(val id: Int, val device_name: String, val device_type: String, val purchase_date: String, val expiry_date: String, val status: String, val progress: Float, val months_left: String, val invoice_name: String, val image_url: String? = null, val history: List<HistoryItem>)
 data class WarrantyDetailResponse(val status: String, val data: WarrantyDetailData?)
 data class AiSettingsResponse(val status: String, val data: AiSettingsData?)
@@ -135,13 +153,11 @@ data class AdminWarrantyItem(
 data class AdminWarrantyResponse(val status: String, val warranties: List<AdminWarrantyItem>)
 data class ApproveWarrantyRequest(val action: String)
 
-// FIXED: Added image_url
 data class WarrantyDevice(val id: Int, val name: String, val status: String, val expiry: String, val image_url: String? = null)
 data class AiRecommendation(val message: String)
 data class MyWarrantiesResponse(val status: String, val devices: List<WarrantyDevice>?, val ai_recommendation: AiRecommendation?)
 data class AlertStats(val total_registered: Int, val active: Int, val expiring_soon: Int, val expired: Int)
 
-// FIXED: Added image_url
 data class AlertDevice(val id: Int, val name: String, val type: String, val expiry: String, val status: String, val image_url: String? = null)
 data class AlertResponse(val status: String, val stats: AlertStats?, val devices: List<AlertDevice>)
 data class AddWarrantyReq(val device_name: String, val brand: String, val expiry_date: String)
@@ -170,8 +186,17 @@ interface ApiService {
     @PUT("/update_address/{id}") fun updateAddress(@Header("Authorization") token: String, @Path("id") id: Int, @Body address: AddressModel): Call<BaseResponse>
     @DELETE("/delete_address/{id}") fun deleteAddress(@Header("Authorization") token: String, @Path("id") id: Int): Call<BaseResponse>
     @GET("/products") fun getAllProducts(): Call<ProductResponse>
+
+    // 🌟 NEW ROUTE LINKED HERE
+    @GET("/product_specs") fun getProductSpecs(@Query("name") name: String): Call<ProductSpecsResponse>
+
     @GET("/profile") fun getProfile(@Header("Authorization") token: String): Call<ProfileResponse>
+
     @GET("/my_orders") fun getMyOrders(@Header("Authorization") token: String): Call<MyOrdersResponse>
+
+    // 🚀 NEW: Added the Cancel Order Route
+    @POST("/cancel_order/{order_id}") fun cancelOrder(@Header("Authorization") token: String, @Path("order_id") orderId: Int): Call<BaseResponse>
+
     @GET("/search_devices") fun searchDevices(@Query("q") query: String): Call<SearchDeviceResponse>
     @POST("/compare_devices") fun compareDevices(@Body request: CompareRequest): Call<CompareResponse>
     @POST("/forgot_password") fun forgotPassword(@Body request: ForgotPasswordRequest): Call<SimpleResponse>
@@ -222,7 +247,6 @@ object RetrofitClient {
             .build()
             .create(ApiService::class.java)
     }
-    // 🚀 NEW: Expose the Auth API correctly
     val authApi: AuthApi by lazy {
         Retrofit.Builder()
             .baseUrl(ApiConfig.BASE_URL)
